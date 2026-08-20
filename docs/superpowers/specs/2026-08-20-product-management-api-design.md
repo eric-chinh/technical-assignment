@@ -241,14 +241,41 @@ concurrency behavior end-to-end).
 
 ## 7. API Design
 
-Base path `/api/v1`, JSON throughout, resource-oriented REST.
+Base path `/api/v1`, JSON throughout, designed to RESTful conventions:
+
+- **Resources are nouns, not verbs** — `/products`, `/products/{id}/variants`,
+  never `/getProducts` or `/createProduct`. Nesting reflects true ownership
+  (`/products/{productId}/variants/{variantId}`), capped at two levels deep
+  to avoid unwieldy URLs.
+- **HTTP methods carry the meaning**: `GET` (safe, no side effects,
+  cacheable), `POST` (create a subordinate resource), `PUT` (full,
+  idempotent replace), `PATCH` (partial update, e.g. the stock sub-resource),
+  `DELETE` (idempotent removal). `PUT`/`DELETE` are idempotent by design —
+  repeating either has the same effect as calling it once.
+- **Status codes are meaningful, not just 200/500**: `201 Created` with a
+  `Location` header pointing at the new resource on every `POST` that
+  creates something (`/categories`, `/products`, `/products/{id}/variants`);
+  `200 OK` with body on `GET`/`PUT`/`PATCH`; `204 No Content` on `DELETE`;
+  `400`/`404`/`409`/`422` for client-side error states (detailed below);
+  never a bare `500` for an expected business condition (e.g. insufficient
+  stock is `409`, not `500`).
+- **Stateless**: every request carries everything needed to process it
+  (API key header, no server-side session) — a prerequisite for the
+  horizontal read scaling in §4.
+- **Filtering, sorting, and pagination are query parameters**, never part of
+  the path (`GET /products?categoryId=3&cursor=...`), keeping the resource
+  URL itself stable regardless of how it's queried.
+- **HATEOAS is explicitly not implemented** — hypermedia links add
+  complexity this assessment's scope doesn't call for; noted here as a
+  deliberate omission rather than an oversight.
 
 ### Categories
 - `GET /categories` — flat list; `?parentId=`, `?activeOnly=true`
 - `GET /categories/{id}`
-- `POST /categories`
+- `POST /categories` — `201 Created` + `Location: /categories/{id}`
 - `PUT /categories/{id}`
-- `DELETE /categories/{id}` — `409` if active products still reference it
+- `DELETE /categories/{id}` — `409` if active products still reference it,
+  else `204 No Content`
 
 ### Products
 - `GET /products` — filters: `categoryId`, `status`, `q` (trigram search on
@@ -257,24 +284,29 @@ Base path `/api/v1`, JSON throughout, resource-oriented REST.
   lightweight list DTO (no variant/detail payload)
 - `GET /products/{id}` / `GET /products/slug/{slug}` — full detail incl.
   variants
-- `POST /products` — body may include an initial `variants[]` array,
-  created transactionally with the product
+- `POST /products` — `201 Created` + `Location: /products/{id}`; body may
+  include an initial `variants[]` array, created transactionally with the
+  product
 - `PUT /products/{id}` — full replace; requires `If-Match` with the version
   token; `409` on mismatch
 - `PATCH /products/{id}` — partial update, same concurrency check
-- `DELETE /products/{id}` — soft delete (`status = Archived`)
+- `DELETE /products/{id}` — soft delete (`status = Archived`), `204 No
+  Content`
 
 ### Variants
 - `GET /products/{productId}/variants`
-- `POST /products/{productId}/variants` — `409` on duplicate SKU
+- `POST /products/{productId}/variants` — `201 Created` +
+  `Location: /products/{productId}/variants/{variantId}`; `409` on
+  duplicate SKU
 - `PUT /products/{productId}/variants/{variantId}`
 - `DELETE /products/{productId}/variants/{variantId}` — soft delete
-  (`is_active = false`)
+  (`is_active = false`), `204 No Content`
 - `PATCH /products/{productId}/variants/{variantId}/stock` — body
   `{ "delta": -3 }` (negative = decrement/sale, positive = restock);
   atomic conditional UPDATE per §3.3; optional `Idempotency-Key` header
   (checked against Redis, short TTL) so a retried request can't
-  double-decrement stock
+  double-decrement stock; `200 OK` with the resulting stock level, or `409`
+  with the available quantity if the decrement can't be satisfied
 
 ### Input/Output Handling
 
