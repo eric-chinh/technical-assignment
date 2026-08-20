@@ -25,8 +25,9 @@ rather than built.
 
 1. Design the schema and consistency strategy first (this doc) — the hardest
    decisions (SQL vs NoSQL, how stock avoids overselling) shape everything else.
-2. Scaffold the ASP.NET Core solution, EF Core model, and Postgres/Redis
-   docker-compose environment.
+2. Scaffold the solution as four Clean Architecture projects (Domain,
+   Application, Infrastructure, Api), plus the Postgres/Redis docker-compose
+   environment.
 3. Implement endpoints bottom-up: categories → products → variants → stock,
    each with validation, error handling, and tests before moving to the next.
 4. Add caching once the read endpoints exist and are correct — caching is a
@@ -178,7 +179,42 @@ scoped to the one write path that actually needs it (stock).
 sharding by category/seller if the catalog became multi-tenant at extreme
 size.
 
-## 5. Technology Stack
+## 5. Solution Architecture (Clean Architecture)
+
+Four projects, dependencies pointing inward only:
+
+- **`ProductManagement.Domain`** — entities (`Product`, `Category`,
+  `ProductVariant`), enums, domain exceptions. Zero external dependencies —
+  no EF Core, no ASP.NET references. This is where the invariants that must
+  always hold live (e.g. stock can't go negative), independent of how they're
+  enforced by any particular database.
+- **`ProductManagement.Application`** — use cases (e.g.
+  `CreateProductHandler`, `AdjustStockHandler`), request/response DTOs,
+  FluentValidation validators, and the interfaces the use cases depend on
+  (`IProductRepository`, `IStockRepository`, `ICacheService`). Depends only on
+  Domain. This is where business rules and orchestration live — no SQL, no
+  HTTP.
+- **`ProductManagement.Infrastructure`** — EF Core `DbContext` + entity
+  configurations + migrations, repository implementations (including the raw
+  SQL atomic stock UPDATE), Redis-backed `ICacheService` implementation.
+  Depends on Application (implements its interfaces) and Domain.
+- **`ProductManagement.Api`** — controllers, middleware (`ProblemDetails`
+  error mapping, API-key auth), Swashbuckle setup, and the composition root
+  (`Program.cs`) that wires Infrastructure implementations to Application
+  interfaces via DI. Controllers depend only on Application (use cases/DTOs)
+  — never directly on EF Core or Infrastructure types.
+
+**Why**: keeps framework/DB-specific concerns (EF Core, Redis, ASP.NET) out
+of business logic, so the atomic-stock-update rule and validation logic are
+unit-testable without a running web host or a real database, and swapping
+Postgres or Redis later wouldn't ripple into Application or Domain.
+
+**Test project layout mirrors this split**: `ProductManagement.UnitTests`
+(Domain + Application, no I/O, fast) and `ProductManagement.IntegrationTests`
+(Testcontainers-backed, exercises the real Postgres atomic-UPDATE and
+concurrency behavior end-to-end).
+
+## 6. Technology Stack
 
 - **Framework**: ASP.NET Core Web API (.NET 10)
 - **ORM**: EF Core (Npgsql provider) — code-first migrations; `xmin` as
@@ -203,7 +239,7 @@ size.
 - **API docs**: Swashbuckle (OpenAPI/Swagger UI) generated from code, plus a
   separately maintained Postman collection for the submission.
 
-## 6. API Design
+## 7. API Design
 
 Base path `/api/v1`, JSON throughout, resource-oriented REST.
 
@@ -250,7 +286,7 @@ found, `409` conflict (duplicate SKU/slug, concurrency, insufficient stock),
 validation. All responses use DTOs, never raw entities, so internal schema
 changes never leak into the API contract.
 
-## 7. Performance & Caching
+## 8. Performance & Caching
 
 - `GET /products/{id}` and `/products/slug/{slug}` → `product:{id}`, TTL 10
   min.
@@ -266,7 +302,7 @@ changes never leak into the API contract.
   reads/writes Postgres directly and invalidates the cache afterward, so
   caching cannot undermine the oversell guarantee from §3.3.
 
-## 8. Edge Cases Covered
+## 9. Edge Cases Covered
 
 - Duplicate SKU or slug on create/rename → `409`
 - Negative price/stock, or `compare_at_price < price` → `400`
@@ -283,11 +319,11 @@ changes never leak into the API contract.
 - Repeated stock-decrement retries with the same `Idempotency-Key` → deduped,
   no double-decrement
 
-## 9. Deliverables
+## 10. Deliverables
 
-- **Code**: ASP.NET Core Web API solution, EF Core migrations,
-  `docker-compose.yml` (api + postgres + redis), README with setup/run
-  instructions.
+- **Code**: Clean Architecture solution (Domain / Application / Infrastructure
+  / Api projects per §5) with EF Core migrations, `docker-compose.yml`
+  (api + postgres + redis), README with setup/run instructions.
 - **Postman collection**: JSON export covering every endpoint including
   example error responses (`400`/`404`/`409`), plus a Postman environment
   file for variables.
@@ -305,7 +341,7 @@ No `gh` CLI is authenticated in this environment, so the repository will be
 fully built and committed locally with git; the final `git push` to the
 user's own GitHub is a manual step outside this session.
 
-## 10. Explicitly Out of Scope
+## 11. Explicitly Out of Scope
 
 Cart, checkout, orders, payments, product images (removed from scope during
 design review), real authentication/authorization, CI/CD pipeline.
