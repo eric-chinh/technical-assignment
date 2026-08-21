@@ -239,6 +239,43 @@ would add overhead without adding any correctness it doesn't already have.
 (Testcontainers-backed, exercises the real Postgres atomic-UPDATE and
 concurrency behavior end-to-end).
 
+### Dependency Injection & Composition Root
+
+Each project registers its own services rather than everything being wired
+directly in `Program.cs`:
+- `ProductManagement.Application` exposes `AddApplication()` — registers
+  use-case handlers and FluentValidation validators
+  (`AddValidatorsFromAssembly`). No external dependencies to configure.
+- `ProductManagement.Infrastructure` exposes `AddInfrastructure(IConfiguration
+  config)` — registers the EF Core `DbContext` (Npgsql, connection string
+  from config), repository implementations, `IUnitOfWork`, and the Redis
+  `IConnectionMultiplexer` + `ICacheService`.
+- `ProductManagement.Api`'s `Program.cs` composes them:
+  `builder.Services.AddApplication().AddInfrastructure(builder.Configuration);`
+  plus Api-only concerns (Swashbuckle, the global exception middleware from
+  §7, controllers). This keeps `Program.cs` a thin composition root instead
+  of an ever-growing registration dump, and each layer's DI needs travel
+  with the layer itself.
+
+**Lifetimes, and the pitfall this avoids**: the `DbContext` is registered
+`Scoped` (one instance per HTTP request — the ASP.NET Core default for
+`AddDbContext`). Every repository implementation and `IUnitOfWork` is also
+registered `Scoped`, resolving **the same `DbContext` instance** within a
+request. This matters concretely: if `IUnitOfWork` ever resolved a
+*different* `DbContext` than the repositories it's meant to coordinate,
+`SaveChangesAsync()` would silently commit nothing meaningful — a common
+failure mode in Clean-Architecture-plus-EF-Core setups, avoided here simply
+by keeping both bound to one scoped registration. `ICacheService`'s
+underlying `IConnectionMultiplexer` is registered `Singleton` instead —
+it's an expensive-to-create, thread-safe connection meant to be reused
+across the app's lifetime, not per-request state like the `DbContext` is.
+
+**Constructor injection only, everywhere** — no service locator, no
+`IServiceProvider` passed into a constructor. Controllers and use-case
+handlers declare dependencies as constructor parameters typed against
+Application/Domain interfaces; nothing outside Infrastructure/Api ever
+references a concrete EF Core or Redis type.
+
 ## 6. Technology Stack
 
 - **Framework**: ASP.NET Core Web API (.NET 10)
@@ -346,6 +383,50 @@ found, `409` conflict (duplicate SKU/slug, concurrency, insufficient stock),
 `422` reserved for business-rule violations not expressible as structural
 validation. All responses use DTOs, never raw entities, so internal schema
 changes never leak into the API contract.
+
+### Error Handling & Global Exception Middleware
+
+**Exception hierarchy, scoped to where each failure is actually detected:**
+- `ProductManagement.Domain` defines a small typed hierarchy
+  (`DomainException` base) for invariant violations an entity itself
+  refuses to allow (e.g. attempting to archive an already-archived
+  product). Domain stays framework-agnostic — it throws plain C# exception
+  types, nothing ASP.NET-aware.
+- `ProductManagement.Application` defines its own use-case-level exceptions:
+  `EntityNotFoundException` (category/product/variant lookup miss),
+  `DuplicateSkuException`, `DuplicateSlugException`.
+- `ProductManagement.Infrastructure` repository implementations catch
+  EF Core/Npgsql-specific exceptions (`DbUpdateConcurrencyException` for an
+  `xmin` mismatch; `DbUpdateException` wrapping a Postgres unique-violation,
+  SQLSTATE `23505`) and **re-throw as the Application-level typed
+  exceptions above** — so nothing above Infrastructure ever needs to know
+  EF Core or Npgsql exception types exist, preserving the Clean
+  Architecture boundary from §5.
+- **Insufficient stock is deliberately not an exception at all** — per
+  §3.3, `ExecuteUpdateAsync` returning `0` affected rows is an expected,
+  common outcome (a popular SKU legitimately selling out under load), not
+  an error condition. It's handled as a plain return-value check in the
+  handler, mapped directly to `409`, keeping the hot concurrency path free
+  of exception-handling overhead for something that isn't exceptional.
+
+**Global handling in `ProductManagement.Api`:** a single `IExceptionHandler`
+implementation, registered via `app.UseExceptionHandler()`, is the only
+place HTTP status codes get decided for thrown exceptions:
+
+| Exception | Status | Notes |
+|---|---|---|
+| FluentValidation `ValidationException` | `400` | field-level error list in the `ProblemDetails` body |
+| `EntityNotFoundException` | `404` | |
+| `DuplicateSkuException` / `DuplicateSlugException` | `409` | |
+| `DbUpdateConcurrencyException` (surfaces if a repository didn't translate it) | `409` | current server state included so the client can retry |
+| anything else (unanticipated: bug, DB connection drop, etc.) | `500` | generic `ProblemDetails` body only — **no exception message or stack trace ever reaches the client** |
+
+For the `500` case specifically: the full exception and stack trace are
+logged server-side via Serilog at `Error` level, tagged with a `traceId`
+(`HttpContext.TraceIdentifier`), and that same `traceId` is echoed back in
+the `ProblemDetails` response's `extensions` field — enough for a bug
+report to be correlated to the exact server-side log entry without ever
+exposing internals to the caller.
 
 ## 8. Performance & Caching
 
