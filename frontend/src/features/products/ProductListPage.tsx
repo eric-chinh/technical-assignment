@@ -8,6 +8,8 @@ import { useDebouncedValue } from '../../shared/hooks/useDebouncedValue';
 import { resolveImageUrl } from '../../shared/lib/resolveImageUrl';
 import type { ProductListItem } from './types';
 
+const PRODUCT_PLACEHOLDER_IMAGE = '/product-placeholder.svg';
+
 export function ProductListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -60,20 +62,20 @@ export function ProductListPage() {
       title: 'Image',
       dataIndex: 'imageUrl',
       key: 'imageUrl',
-      render: (url: string | null) =>
-        url ? (
-          <img
-            src={resolveImageUrl(url) ?? undefined}
-            alt=""
-            loading="lazy"
-            style={{ width: 40, height: 40, objectFit: 'cover' }}
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.visibility = 'hidden';
-            }}
-          />
-        ) : (
-          '—'
-        ),
+      render: (url: string | null) => (
+        <img
+          src={resolveImageUrl(url) ?? PRODUCT_PLACEHOLDER_IMAGE}
+          alt=""
+          loading="lazy"
+          style={{ width: 40, height: 40, objectFit: 'cover' }}
+          onError={(e) => {
+            const img = e.target as HTMLImageElement;
+            if (img.src.endsWith(PRODUCT_PLACEHOLDER_IMAGE)) return; // avoid a loop if the placeholder itself fails
+            img.onerror = null;
+            img.src = PRODUCT_PLACEHOLDER_IMAGE;
+          }}
+        />
+      ),
     },
     { title: 'Name', dataIndex: 'name', key: 'name' },
     {

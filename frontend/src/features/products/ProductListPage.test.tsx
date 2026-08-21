@@ -32,6 +32,15 @@ describe('ProductListPage', () => {
     expect(await screen.findByText('Classic Cotton Tee')).toBeInTheDocument();
   });
 
+  it('shows the default placeholder image for a product with no imageUrl', async () => {
+    resetMockProducts();
+    renderPage();
+    const row = (await screen.findByText('Classic Cotton Tee')).closest('tr')!;
+
+    const image = row.querySelector('img')!;
+    expect(image).toHaveAttribute('src', '/product-placeholder.svg');
+  });
+
   it('shows the empty state when a search matches nothing', async () => {
     resetMockProducts();
     renderPage();
