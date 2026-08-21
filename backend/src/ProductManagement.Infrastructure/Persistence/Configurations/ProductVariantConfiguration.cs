@@ -32,7 +32,6 @@ public class ProductVariantConfiguration : IEntityTypeConfiguration<ProductVaria
         builder.Property(v => v.UpdatedAt).HasColumnName("updated_at");
 
         builder.HasIndex(v => v.Sku).IsUnique();
-        builder.HasIndex(v => v.ProductId);
         builder.HasIndex(v => v.ProductId)
             .HasFilter("is_active AND stock_quantity > 0")
             .HasDatabaseName("ix_product_variants_active_in_stock");
