@@ -481,6 +481,37 @@ exposing internals to the caller.
   pattern if stock-change events ever need to be published to other
   services.
 
+### Local Development & Testing Workflow
+
+`docker-compose.yml` brings up three services for **manual** local testing
+— this is distinct from the automated integration test suite, which keeps
+using Testcontainers (see below):
+- `postgres` (matching the production-targeted major version) — named
+  volume so data survives restarts, healthcheck gating readiness
+- `redis` — healthcheck gating readiness
+- `api` — built from a local `Dockerfile`, `depends_on` both services with
+  `condition: service_healthy` so it never starts before its dependencies
+  can accept connections; applies EF Core migrations automatically at boot
+  (`dbContext.Database.MigrateAsync()`), gated to non-`Production`
+  environments only, so this auto-migrate behavior can never run against a
+  real deployment by accident.
+
+**Workflow**: `docker compose up --build` brings up the full stack; Swagger
+UI is reachable at `http://localhost:<port>/swagger` for interactive
+exploration, and the delivered Postman collection's environment file points
+at the same base URL — so the same running stack serves both manual
+Swagger poking and the full Postman collection run. `docker compose down
+-v` tears everything down including volumes, for a clean-slate restart.
+
+**Why the automated integration suite still uses Testcontainers rather than
+this compose stack**: Testcontainers spins up and tears down its own
+ephemeral Postgres per test run, so `dotnet test` works standalone (e.g. in
+a future CI pipeline) without requiring `docker compose up` first or
+worrying about state leaking between test runs on a long-lived database.
+The two serve different purposes — this compose stack is for a human
+exercising the API by hand; Testcontainers is for the test suite proving
+correctness (especially the concurrency test from §6) reproducibly.
+
 No `gh` CLI is authenticated in this environment, so the repository will be
 fully built and committed locally with git; the final `git push` to the
 user's own GitHub is a manual step outside this session.
