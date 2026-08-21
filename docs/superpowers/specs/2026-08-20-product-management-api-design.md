@@ -705,32 +705,43 @@ exposing internals to the caller.
 
 ### Local Development & Testing Workflow
 
-`docker-compose.yml` brings up three services and is the **single**
-local-testing setup — both manual testing and the automated integration
-suite target it, no Testcontainers involved:
-- `postgres` (matching the production-targeted major version) — named
-  volume so data survives restarts, healthcheck gating readiness
-- `redis` — healthcheck gating readiness
-- `api` — built from a local `Dockerfile`, `depends_on` both services with
-  `condition: service_healthy` so it never starts before its dependencies
-  can accept connections; applies EF Core migrations automatically at boot
-  (`dbContext.Database.MigrateAsync()`), then seeds sample data (below),
-  both gated to non-`Production` environments only, so neither behavior can
-  ever run against a real deployment by accident. A named volume
-  (`uploads_data`) is mounted at `/app/wwwroot/uploads`, and
-  `app.UseStaticFiles()` serves that directory directly — so an uploaded
-  product image (§7) survives container restarts and is reachable at
-  `http://localhost:<port>/uploads/products/{id}/{file}` for the front-end
+`docker-compose.yml` brings up three services on fixed host ports (pinned
+here explicitly so there's no ambiguity for the front-end or for manual
+testing) and is the **single** local-testing setup — both manual testing
+and the automated integration suite target it, no Testcontainers involved:
+- `postgres` → host port **5432** — named volume so data survives
+  restarts, healthcheck gating readiness
+- `redis` → host port **6379** — healthcheck gating readiness
+- `api` → host port **8080** — built from a local `Dockerfile`,
+  `depends_on` both services with `condition: service_healthy` so it never
+  starts before its dependencies can accept connections; applies EF Core
+  migrations automatically at boot (`dbContext.Database.MigrateAsync()`),
+  then seeds sample data (below), both gated to non-`Production`
+  environments only, so neither behavior can ever run against a real
+  deployment by accident. A named volume (`uploads_data`) is mounted at
+  `/app/wwwroot/uploads`, and `app.UseStaticFiles()` serves that directory
+  directly — so an uploaded product image (§7) survives container
+  restarts and is reachable at
+  `http://localhost:8080/uploads/products/{id}/{file}` for the front-end
   to render in an `<img>` tag, no separate file-serving service needed.
 
 **Workflow**: `docker compose up --build` (or `-d` to run detached) brings
 up the full stack; Swagger UI is reachable at
-`http://localhost:<port>/swagger` for interactive exploration, and the
+`http://localhost:8080/swagger` for interactive exploration, and the
 delivered Postman collection's environment file points at the same base
-URL — so the same running stack serves manual Swagger poking, the Postman
-collection, and `dotnet test` for the integration project. `docker compose
-down -v` tears everything down including volumes, for a clean-slate
-restart.
+URL (`http://localhost:8080/api/v1`) — so the same running stack serves
+manual Swagger poking, the Postman collection, and `dotnet test` for the
+integration project. `docker compose down -v` tears everything down
+including volumes, for a clean-slate restart.
+
+**Running only part of the stack** — useful when actively developing the
+API itself: `docker compose up postgres redis` starts just the
+dependencies, then run the API directly on the host (`dotnet watch run`
+from `backend/src/ProductManagement.Api`) for hot reload, pointing
+`ConnectionStrings__Default`/`Redis__ConnectionString` at
+`localhost:5432`/`localhost:6379` (the same ports the compose services
+expose, so no separate "local" connection string is needed — same config
+either way).
 
 ### Seed Data
 

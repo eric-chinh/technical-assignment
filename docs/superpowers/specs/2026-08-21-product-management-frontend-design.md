@@ -264,26 +264,46 @@ parent.
 - **Repository structure**: same repo as the backend, sibling folders —
   `backend/` (the ASP.NET Core solution) and `frontend/` (this app), with
   `docker-compose.yml` at the repo root orchestrating all four services
-  (`postgres`, `redis`, `api`, and a new `web` service) so one clone plus
-  one command gets a reviewer a fully running app, not just an API.
+  (`postgres` on **5432**, `redis` on **6379**, `api` on **8080** — all
+  pinned in the backend spec's §10 — and a new `web` service on **5173**)
+  so one clone plus one command gets a reviewer a fully running app, not
+  just an API.
 - **`web` service**: multi-stage Dockerfile — Vite build stage, then
-  served as static files via nginx. `depends_on: api` with a health
-  condition.
+  served as static files via nginx on port 5173. `depends_on: api` with a
+  health condition.
 - **Browser-reachable API URL, not the Docker-internal one**: the frontend
   is static files served to the *browser*, so its API base URL must be
-  something the browser can reach (`http://localhost:<api-host-port>/api/v1`),
-  not the internal Docker network hostname (`http://api:8080`) that only
+  something the browser can reach — `http://localhost:8080/api/v1` — not
+  the internal Docker network hostname (`http://api:8080`) that only
   resolves container-to-container. Baked in at build time via
-  `VITE_API_BASE_URL` — named here explicitly because it's a common
-  docker-compose-plus-SPA mistake to get backwards.
-- **Local dev workflow**: `docker compose up postgres redis api` for the
-  backend, then `npm run dev` on the host for the frontend — fast Vite HMR
-  loop for actual development. `docker compose up` (all services) brings
-  up the built `web` service too, for a full one-command demo matching
-  what a reviewer would run.
-- **Environment variables**: `VITE_API_BASE_URL` (build-time).
-- **README**: setup/run instructions (both workflows above), env vars,
-  known limitations.
+  `VITE_API_BASE_URL`, read from `frontend/.env` (checked into the repo,
+  since this value is identical in every mode below — the api's
+  host-exposed port never changes) — named here explicitly because it's a
+  common docker-compose-plus-SPA mistake to get backwards.
+- **Local dev workflow, three modes**:
+  1. **Full stack, one command** (what a reviewer runs):
+     `docker compose up --build` → open `http://localhost:5173`.
+  2. **Active front-end development** (fast Vite HMR):
+     `docker compose up postgres redis api` (backend + real seeded data,
+     `web` deliberately not started to avoid a port clash), then in a
+     second terminal `cd frontend && npm install && npm run dev` → Vite
+     serves on `http://localhost:5173` directly, reading the same
+     `VITE_API_BASE_URL=http://localhost:8080/api/v1` from `.env`.
+  3. **Active backend development**: `docker compose up postgres redis`
+     only, then `dotnet watch run` from
+     `backend/src/ProductManagement.Api` for hot reload (backend §10)
+     against those same exposed ports.
+- **Testing commands**:
+  - Backend: `dotnet test` from `backend/` — `IntegrationTests` needs
+    `docker compose up postgres redis` running first (backend §10);
+    `UnitTests`/`ArchitectureTests` need nothing running.
+  - Frontend: `npm test` from `frontend/` — needs **nothing** running;
+    MSW mocks every API call, so frontend tests never touch a real
+    backend at all.
+- **Environment variables**: `VITE_API_BASE_URL` (build-time, default in
+  `frontend/.env`: `http://localhost:8080/api/v1`).
+- **README**: setup/run instructions (all three modes above, plus testing
+  commands), env vars, known limitations.
 - **Limitations & future improvements** (documented, not built): no login
   UI (mirrors the backend's no-auth decision — consistent, not an
   oversight); no real-time updates (another user's stock change isn't
