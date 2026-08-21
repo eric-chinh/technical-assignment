@@ -123,4 +123,19 @@ export const handlers = [
     variant.stockQuantity += delta;
     return HttpResponse.json({ succeeded: true, newQuantity: variant.stockQuantity, availableQuantity: null });
   }),
+
+  http.post(`${baseUrl}/products/:productId/image`, async ({ params }) => {
+    const product = mockProducts.find((p) => p.id === Number(params.productId));
+    if (!product) return new HttpResponse(null, { status: 404 });
+    const imageUrl = `/uploads/products/${product.id}/mock.jpg`;
+    product.imageUrl = imageUrl;
+    return HttpResponse.json({ imageUrl });
+  }),
+
+  http.delete(`${baseUrl}/products/:productId/image`, ({ params }) => {
+    const product = mockProducts.find((p) => p.id === Number(params.productId));
+    if (!product?.imageUrl) return new HttpResponse(null, { status: 404 });
+    product.imageUrl = null;
+    return new HttpResponse(null, { status: 204 });
+  }),
 ];

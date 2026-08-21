@@ -73,6 +73,19 @@ export const productsApi = api.injectEndpoints({
         }
       },
     }),
+    uploadImage: builder.mutation<{ imageUrl: string }, { productId: number; formData: FormData }>({
+      query: ({ productId, formData }) => ({
+        url: `/products/${productId}/image`,
+        method: 'POST',
+        data: formData,
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+      invalidatesTags: (_result, _error, { productId }) => [{ type: 'Product', id: productId }],
+    }),
+    deleteImage: builder.mutation<void, number>({
+      query: (productId) => ({ url: `/products/${productId}/image`, method: 'DELETE' }),
+      invalidatesTags: (_result, _error, productId) => [{ type: 'Product', id: productId }],
+    }),
   }),
 });
 
@@ -85,4 +98,6 @@ export const {
   useCreateVariantMutation,
   useDeleteVariantMutation,
   useAdjustStockMutation,
+  useUploadImageMutation,
+  useDeleteImageMutation,
 } = productsApi;

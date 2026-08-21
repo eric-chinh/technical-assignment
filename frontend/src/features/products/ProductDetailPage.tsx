@@ -3,6 +3,7 @@ import { Spin, Typography } from 'antd';
 import { useGetProductQuery } from './api';
 import { ProductForm } from './ProductForm';
 import { VariantsTable } from './VariantsTable';
+import { ImageUploader } from './ImageUploader';
 
 export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,9 +17,14 @@ export function ProductDetailPage() {
   return (
     <div>
       <Typography.Title level={3}>{isCreate ? 'New Product' : product?.name}</Typography.Title>
-      <ProductForm product={product ?? null} />
+      <div style={{ display: 'flex', gap: 24, marginBottom: 24 }}>
+        {!isCreate && productId && <ImageUploader productId={productId} imageUrl={product?.imageUrl ?? null} />}
+        <div style={{ flex: 1 }}>
+          <ProductForm product={product ?? null} />
+        </div>
+      </div>
       {!isCreate && productId && (
-        <div style={{ marginTop: 24 }}>
+        <div>
           <Typography.Title level={5}>Variants</Typography.Title>
           <VariantsTable productId={productId} variants={product?.variants ?? []} />
         </div>
