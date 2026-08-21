@@ -599,7 +599,9 @@ exposing internals to the caller.
   example error responses (`400`/`404`/`409`), plus a Postman environment
   file for variables.
 - **Environment variables**: `ConnectionStrings__Default`,
-  `Redis__ConnectionString`, `ASPNETCORE_ENVIRONMENT`.
+  `Redis__ConnectionString`, `ASPNETCORE_ENVIRONMENT`, `Seeding__CategoryCount`,
+  `Seeding__ProductCount`, `Seeding__MaxVariantsPerProduct` (§10 — all
+  optional, default to the seeder's built-in values if unset).
 - **Design doc**: this spec, covering approach, DB rationale, schema, API
   reference, and performance/concurrency notes.
 - **Limitations & future improvements** (documented, not built): **no
@@ -621,9 +623,9 @@ suite target it, no Testcontainers involved:
 - `api` — built from a local `Dockerfile`, `depends_on` both services with
   `condition: service_healthy` so it never starts before its dependencies
   can accept connections; applies EF Core migrations automatically at boot
-  (`dbContext.Database.MigrateAsync()`), gated to non-`Production`
-  environments only, so this auto-migrate behavior can never run against a
-  real deployment by accident.
+  (`dbContext.Database.MigrateAsync()`), then seeds sample data (below),
+  both gated to non-`Production` environments only, so neither behavior can
+  ever run against a real deployment by accident.
 
 **Workflow**: `docker compose up --build` (or `-d` to run detached) brings
 up the full stack; Swagger UI is reachable at
@@ -633,6 +635,51 @@ URL — so the same running stack serves manual Swagger poking, the Postman
 collection, and `dotnet test` for the integration project. `docker compose
 down -v` tears everything down including volumes, for a clean-slate
 restart.
+
+### Seed Data
+
+`DbInitializer.SeedAsync()` runs immediately after the auto-migrate step,
+gated to non-`Production` environments only, and only when
+`await db.Products.AnyAsync() == false` — so it's a no-op on every restart
+after the first, without needing a separate "have I seeded before" flag.
+
+**Scale, configurable via `Seeding__*` env vars** so it can be dialed up
+for heavier performance testing without a code change: `CategoryCount`
+(default 40 — 8 top-level × ~5 children), `ProductCount` (default 5,000),
+`MaxVariantsPerProduct` (default 2–4, randomized) → ~12,500 variants by
+default. Bump `ProductCount` to 50,000+ later to stress-test search
+ranking and cursor pagination at real scale.
+
+**Realistic data via `Bogus`**, seeded with a fixed random seed so a
+regenerated dataset is deterministic — real-sounding fashion product
+names, brands, descriptions, and `attributes` JSON (material/fit/care),
+not `"Product 1"`/`"Product 2"`. This matters specifically for exercising
+§3.3's search ranking meaningfully. Products are assigned only to leaf
+categories, never the ~8 top-level container categories, matching how
+browsing actually works.
+
+**Insert performance**: batched (~1,000 rows per `SaveChangesAsync()`)
+with `ChangeTracker.AutoDetectChangesEnabled = false` during the loop —
+plain per-row `AddRangeAsync`/`SaveChangesAsync` would be slow at this
+volume purely from EF Core's change-tracking overhead. If `ProductCount`
+is ever pushed into the millions for heavier benchmarking, Npgsql's binary
+`COPY` API is the next lever — a documented option, not built now.
+
+**Exact lifecycle behavior** — this is keyed on *"is there data,"* not
+*"has seeding run before,"* which produces different outcomes depending on
+how the stack is restarted:
+- `docker compose stop` then `up` again (container restarted, volume
+  intact): `products` still has rows → seeder skips. This is the common
+  case — seed once, then it's just there.
+- `docker compose down -v` (volumes removed) then `up`: Postgres data is
+  wiped along with the volume → `products` is empty again → **the seeder
+  runs again**, regenerating the same deterministic dataset. This is
+  intentional — `down -v` is exactly how you'd reset to a clean slate for
+  a fresh performance-testing run.
+- Manually deleting rows without restarting the app (e.g. `DELETE FROM
+  products` by hand mid-session): the check only runs at startup, not
+  continuously, so it won't auto-reseed until the `api` process actually
+  restarts (`docker compose restart api`, or a full `up` again).
 
 **Keeping automated tests isolated on a persistent (not ephemeral)
 database**: since `IntegrationTests` runs against the same long-lived
