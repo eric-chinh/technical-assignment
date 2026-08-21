@@ -198,7 +198,8 @@ scoped to the one write path that actually needs it (stock).
   index-bound (`O(log n)`) regardless of catalog size or page depth, unlike
   `OFFSET n` which forces Postgres to scan and discard `n` rows.
 - Indexes matched to actual query patterns (category filter, slug lookup,
-  attribute filter, name search) so query cost stays flat as row count grows.
+  attribute filter, full-text search — §3.3) so query cost stays flat as
+  row count grows.
 - Stateless API layer — horizontally scaled behind a load balancer with
   nothing shared to coordinate.
 - **Documented future step, not built**: Postgres read replicas (route GETs
@@ -234,9 +235,16 @@ Four projects, dependencies pointing inward only:
 - **`ProductManagement.Application`** — use cases (e.g.
   `CreateProductHandler`, `AdjustStockHandler`), request/response DTOs,
   FluentValidation validators, and the interfaces the use cases depend on
-  (`IProductRepository`, `IStockRepository`, `ICategoryRepository`,
-  `ICacheService`, `IUnitOfWork`). Depends only on Domain. This is where
-  business rules and orchestration live — no SQL, no HTTP.
+  (`IProductRepository`, `IVariantRepository`, `IStockRepository`,
+  `ICategoryRepository`, `ICacheService`, `IUnitOfWork`). Depends only on
+  Domain. This is where business rules and orchestration live — no SQL, no
+  HTTP. `IVariantRepository` and `IStockRepository` are deliberately
+  separate: `IVariantRepository` is general variant CRUD (create, update
+  non-stock fields, soft-delete), while `IStockRepository` exposes only the
+  single atomic adjustment method from §3.4 — keeping `AdjustStockHandler`'s
+  dependency surface down to exactly the one method it needs, easier to
+  fake with NSubstitute and impossible to misuse for a non-atomic stock
+  write by accident.
 - **`ProductManagement.Infrastructure`** — EF Core `DbContext` + entity
   configurations + migrations, repository implementations, the
   `ExecuteUpdateAsync`-based atomic stock update, an `IUnitOfWork`
@@ -393,8 +401,10 @@ references a concrete EF Core or Redis type.
   fully-atomic conditional update — no hand-written/raw SQL anywhere in the
   codebase.
 - **Persistence coordination**: Repository pattern (`IProductRepository`,
-  `IVariantRepository`, `ICategoryRepository` in Application, implemented in
-  Infrastructure) plus a thin `IUnitOfWork` over `DbContext.SaveChangesAsync`
+  `IVariantRepository`, `IStockRepository`, `ICategoryRepository` in
+  Application, implemented in Infrastructure — §5 explains why variant CRUD
+  and the atomic stock adjustment are split into two interfaces) plus a
+  thin `IUnitOfWork` over `DbContext.SaveChangesAsync`
   for use cases that must commit writes across more than one repository
   atomically (§5).
 - **Validation**: FluentValidation — one validator per request DTO. Chosen
@@ -441,12 +451,11 @@ Base path `/api/v1`, JSON throughout, designed to RESTful conventions:
   `Location` header pointing at the new resource on every `POST` that
   creates something (`/categories`, `/products`, `/products/{id}/variants`);
   `200 OK` with body on `GET`/`PUT`/`PATCH`; `204 No Content` on `DELETE`;
-  `400`/`404`/`409`/`422` for client-side error states (detailed below);
+  `400`/`404`/`409` for client-side error states (detailed below);
   never a bare `500` for an expected business condition (e.g. insufficient
   stock is `409`, not `500`).
-- **Stateless**: every request carries everything needed to process it
-  (API key header, no server-side session) — a prerequisite for the
-  horizontal read scaling in §4.
+- **Stateless**: no server-side session — a prerequisite for the horizontal
+  read scaling in §4.
 - **Filtering, sorting, and pagination are query parameters**, never part of
   the path (`GET /products?categoryId=3&cursor=...`), keeping the resource
   URL itself stable regardless of how it's queried.
@@ -473,7 +482,12 @@ Base path `/api/v1`, JSON throughout, designed to RESTful conventions:
   than falling back to the default recency order. Returns a lightweight
   list DTO (no variant/detail payload).
 - `GET /products/{id}` / `GET /products/slug/{slug}` — full detail incl.
-  variants
+  variants; response carries an `ETag` header derived from the row's
+  `xmin` (§3.4) — this is the version token a later `PUT`/`PATCH` echoes
+  back via `If-Match`, closing the loop on the optimistic-concurrency flow.
+  `POST`/`PUT`/`PATCH` responses carry the same header for the newly
+  written state, so a client never has to re-`GET` just to get the next
+  version token before its next write.
 - `POST /products` — `201 Created` + `Location: /products/{id}`; body may
   include an initial `variants[]` array, created transactionally with the
   product
@@ -503,10 +517,11 @@ Base path `/api/v1`, JSON throughout, designed to RESTful conventions:
 Every write: FluentValidation → business-rule check (FK existence,
 uniqueness) → DB write inside a transaction → mapped response DTO. Errors
 use **RFC 7807 `ProblemDetails`** uniformly: `400` validation, `404` not
-found, `409` conflict (duplicate SKU/slug, concurrency, insufficient stock),
-`422` reserved for business-rule violations not expressible as structural
-validation. All responses use DTOs, never raw entities, so internal schema
-changes never leak into the API contract.
+found, `409` conflict (duplicate SKU/slug, concurrency, insufficient stock).
+The full exception→status mapping is the table in "Error Handling" below —
+every case in this design resolves to one of those three, so no other
+4xx code is used. All responses use DTOs, never raw entities, so internal
+schema changes never leak into the API contract.
 
 ### Error Handling & Global Exception Middleware
 
@@ -600,8 +615,8 @@ exposing internals to the caller.
   file for variables.
 - **Environment variables**: `ConnectionStrings__Default`,
   `Redis__ConnectionString`, `ASPNETCORE_ENVIRONMENT`, `Seeding__CategoryCount`,
-  `Seeding__ProductCount`, `Seeding__MaxVariantsPerProduct` (§10 — all
-  optional, default to the seeder's built-in values if unset).
+  `Seeding__ProductCount`, `Seeding__MaxVariantsPerProduct` (see Seed Data,
+  below — all optional, default to the seeder's built-in values if unset).
 - **Design doc**: this spec, covering approach, DB rationale, schema, API
   reference, and performance/concurrency notes.
 - **Limitations & future improvements** (documented, not built): **no
