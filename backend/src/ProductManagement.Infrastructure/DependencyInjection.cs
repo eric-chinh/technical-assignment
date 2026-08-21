@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IVariantRepository, VariantRepository>();
         services.AddScoped<ICacheService, RedisCacheService>();
+        services.AddScoped<IStockRepository, StockRepository>();
 
         return services;
     }

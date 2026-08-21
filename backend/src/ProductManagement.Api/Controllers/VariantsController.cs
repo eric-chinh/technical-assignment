@@ -34,4 +34,14 @@ public class VariantsController : ControllerBase
         await handler.HandleAsync(variantId, ct);
         return NoContent();
     }
+
+    [HttpPatch("{variantId:long}/stock")]
+    public async Task<IActionResult> AdjustStock(
+        [FromServices] AdjustStockHandler handler, long productId, long variantId,
+        [FromBody] AdjustStockRequest request, CancellationToken ct)
+    {
+        var idempotencyKey = Request.Headers.TryGetValue("Idempotency-Key", out var values) ? values.ToString() : null;
+        var result = await handler.HandleAsync(variantId, request, idempotencyKey, ct);
+        return result.Succeeded ? Ok(result) : Conflict(result);
+    }
 }
