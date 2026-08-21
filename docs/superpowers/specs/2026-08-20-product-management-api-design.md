@@ -68,20 +68,26 @@ categories(
 --          partial btree(id) WHERE is_active
 
 products(
-  id          bigint identity PK,
-  name        varchar(200)  NOT NULL,
-  slug        citext        NOT NULL UNIQUE,
-  description text          NULL,
-  category_id bigint        NOT NULL FK -> categories(id),
-  brand       varchar(100)  NULL,
-  status      smallint      NOT NULL DEFAULT 0,  -- 0=Draft,1=Active,2=Archived
-  attributes  jsonb         NOT NULL DEFAULT '{}',
-  created_at  timestamptz   NOT NULL DEFAULT now(),
-  updated_at  timestamptz   NOT NULL DEFAULT now()
+  id             bigint identity PK,
+  name           varchar(200)  NOT NULL,
+  slug           citext        NOT NULL UNIQUE,
+  description    text          NULL,
+  category_id    bigint        NOT NULL FK -> categories(id),
+  brand          varchar(100)  NULL,
+  status         smallint      NOT NULL DEFAULT 0,  -- 0=Draft,1=Active,2=Archived
+  attributes     jsonb         NOT NULL DEFAULT '{}',
+  search_vector  tsvector      GENERATED ALWAYS AS (
+                   setweight(to_tsvector('english', coalesce(name, '')), 'A') ||
+                   setweight(to_tsvector('english', coalesce(brand, '')), 'B') ||
+                   setweight(to_tsvector('english', coalesce(description, '')), 'C')
+                 ) STORED,
+  created_at     timestamptz   NOT NULL DEFAULT now(),
+  updated_at     timestamptz   NOT NULL DEFAULT now()
   -- xmin (Postgres system column) used as EF Core concurrency token
 )
 -- indexes: unique(slug), btree(category_id), btree(status),
---          GIN(attributes jsonb_path_ops), GIN trigram(name) via pg_trgm
+--          GIN(attributes jsonb_path_ops), GIN(search_vector),
+--          GIN trigram(name) via pg_trgm — typo-tolerant fallback, see §3.3
 
 product_variants(
   id                bigint identity PK,
@@ -120,7 +126,34 @@ public hard-delete endpoint (hard delete/cascade is a DB-level behavior used
 only internally, not exposed as an API operation, to avoid destructive
 accidents on a live catalog).
 
-### 3.3 Consistency Strategy
+### 3.3 Search Strategy
+
+`q` on `GET /products` (§7) searches `name`, `brand`, and `description`
+together via `products.search_vector` — a generated, always-in-sync
+`tsvector` column (Postgres computes it automatically on every
+insert/update, no application code keeps it current), weighted `name` >
+`brand` > `description` so a match in the product name ranks above an
+incidental mention buried in the description. Matched via
+`search_vector @@ websearch_to_tsquery('english', :q)` (handles multi-word
+queries, phrases in quotes, `-exclude` terms — the same query syntax users
+already expect from a search box), results ordered by `ts_rank(search_vector,
+query)` — actual relevance ranking, not just filter-then-sort-by-date.
+
+**Typo fallback**: full-text search doesn't tolerate misspellings (`ts_query`
+matches lexemes, not approximate strings). If the full-text query returns
+zero rows, the API falls back to the trigram similarity index on `name`
+(`pg_trgm`) — catching the case where a customer typed "tshirt" or a
+minor misspelling that full-text search's exact-lexeme matching would miss
+entirely. Fallback only fires on zero results, so it never overrides a
+real ranked full-text match with a fuzzier, less precise one.
+
+**Deliberately still Postgres-only**: this is a meaningful upgrade over a
+single `ILIKE`/trigram-only search without introducing new infrastructure —
+Elasticsearch/vector search remains a documented future improvement (§10)
+for when result-ranking sophistication or catalog scale genuinely outgrows
+what Postgres full-text search can do.
+
+### 3.4 Consistency Strategy
 
 Two mechanisms, chosen per write pattern:
 
@@ -229,7 +262,7 @@ across more than one repository in a single logical operation — e.g.
 `CreateProductHandler`, which creates a product and its initial
 `variants[]` together — call `IUnitOfWork.SaveChangesAsync()` once after
 both repository calls, so either both persist or neither does.
-`AdjustStockHandler` (§3.3) deliberately does **not** go through
+`AdjustStockHandler` (§3.4) deliberately does **not** go through
 `IUnitOfWork` — its `ExecuteUpdateAsync` call is already a single atomic
 statement against one row, so wrapping it in a unit-of-work transaction
 would add overhead without adding any correctness it doesn't already have.
@@ -266,7 +299,7 @@ every save:
 **Explicitly not unit tested** — these require the real docker-compose
 Postgres/Redis to mean anything, and live in `IntegrationTests` instead:
 the actual `ExecuteUpdateAsync` atomic behavior, EF Core query translation,
-real Redis cache behavior. This is exactly why §3.3's concurrency guarantee
+real Redis cache behavior. This is exactly why §3.4's concurrency guarantee
 is proven at the integration layer, not mocked away.
 
 ### Architecture Tests — Enforcing the Dependency Rule
@@ -356,7 +389,7 @@ references a concrete EF Core or Redis type.
 - **ORM**: EF Core 10 (`Microsoft.EntityFrameworkCore*` 10.0.11,
   `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3) — code-first migrations; `xmin` as
   native concurrency token; the stock update uses EF Core's
-  `ExecuteUpdateAsync` bulk-update API (§3.3) for a LINQ-expressed, still
+  `ExecuteUpdateAsync` bulk-update API (§3.4) for a LINQ-expressed, still
   fully-atomic conditional update — no hand-written/raw SQL anywhere in the
   codebase.
 - **Persistence coordination**: Repository pattern (`IProductRepository`,
@@ -430,10 +463,15 @@ Base path `/api/v1`, JSON throughout, designed to RESTful conventions:
   else `204 No Content`
 
 ### Products
-- `GET /products` — filters: `categoryId`, `status`, `q` (trigram search on
-  name), `minPrice`/`maxPrice`, `attributes` (JSON containment match);
-  cursor pagination (`?cursor=&limit=`, `limit` capped at 100); returns a
-  lightweight list DTO (no variant/detail payload)
+- `GET /products` — filters: `categoryId`, `status`, `q` (full-text search
+  across name/brand/description, ranked, with a trigram typo-tolerant
+  fallback — §3.3), `minPrice`/`maxPrice`, `attributes` (JSON containment
+  match); cursor pagination (`?cursor=&limit=`, `limit` capped at 100).
+  Without `q`, the cursor is keyed on `(created_at, id)` as usual; with `q`,
+  it's keyed on `(ts_rank, id)` instead, so relevance-ordered results still
+  paginate correctly (`id` breaks ties between equally-ranked rows) rather
+  than falling back to the default recency order. Returns a lightweight
+  list DTO (no variant/detail payload).
 - `GET /products/{id}` / `GET /products/slug/{slug}` — full detail incl.
   variants
 - `POST /products` — `201 Created` + `Location: /products/{id}`; body may
@@ -455,7 +493,7 @@ Base path `/api/v1`, JSON throughout, designed to RESTful conventions:
   (`is_active = false`), `204 No Content`
 - `PATCH /products/{productId}/variants/{variantId}/stock` — body
   `{ "delta": -3 }` (negative = decrement/sale, positive = restock);
-  atomic conditional UPDATE per §3.3; optional `Idempotency-Key` header
+  atomic conditional UPDATE per §3.4; optional `Idempotency-Key` header
   (checked against Redis, short TTL) so a retried request can't
   double-decrement stock; `200 OK` with the resulting stock level, or `409`
   with the available quantity if the decrement can't be satisfied
@@ -489,7 +527,7 @@ changes never leak into the API contract.
   EF Core or Npgsql exception types exist, preserving the Clean
   Architecture boundary from §5.
 - **Insufficient stock is deliberately not an exception at all** — per
-  §3.3, `ExecuteUpdateAsync` returning `0` affected rows is an expected,
+  §3.4, `ExecuteUpdateAsync` returning `0` affected rows is an expected,
   common outcome (a popular SKU legitimately selling out under load), not
   an error condition. It's handled as a plain return-value check in the
   handler, mapped directly to `409`, keeping the hot concurrency path free
@@ -528,7 +566,7 @@ exposing internals to the caller.
   production-unsafe cache-clearing patterns.
 - The cache is never authoritative for stock — the stock endpoint always
   reads/writes Postgres directly and invalidates the cache afterward, so
-  caching cannot undermine the oversell guarantee from §3.3.
+  caching cannot undermine the oversell guarantee from §3.4.
 
 ## 9. Edge Cases Covered
 
@@ -546,6 +584,11 @@ exposing internals to the caller.
 - Case-insensitive/unicode-safe slugs and search (`citext`)
 - Repeated stock-decrement retries with the same `Idempotency-Key` → deduped,
   no double-decrement
+- Search query with a typo/misspelling that full-text search misses →
+  trigram fallback still returns results (§3.3)
+- Search query matching nothing at all (both full-text and trigram) →
+  `200` with an empty result set, not `404` (an empty list is a valid,
+  successful answer to "search for X")
 
 ## 10. Deliverables
 
