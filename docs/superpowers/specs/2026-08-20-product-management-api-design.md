@@ -125,14 +125,25 @@ accidents on a live catalog).
 
 Two mechanisms, chosen per write pattern:
 
-- **Stock changes** (the concurrency-critical path): a single atomic SQL
-  statement inside a transaction —
-  `UPDATE product_variants SET stock_quantity = stock_quantity - :qty
-  WHERE id = :id AND stock_quantity >= :qty`. Zero rows affected means
-  insufficient stock → `409 Conflict`. Postgres's row-level lock during the
-  UPDATE itself prevents any interleaving that could oversell, without a
-  read-then-write race window, long-held transactions, or `SERIALIZABLE`
-  isolation.
+- **Stock changes** (the concurrency-critical path): a single atomic
+  expression-based update, issued via EF Core's `ExecuteUpdateAsync` (no
+  hand-written SQL, no load-then-save) —
+  ```csharp
+  var affected = await db.ProductVariants
+      .Where(v => v.Id == id && v.StockQuantity >= qty)
+      .ExecuteUpdateAsync(s => s.SetProperty(
+          v => v.StockQuantity, v => v.StockQuantity - qty));
+  ```
+  which compiles to `UPDATE product_variants SET stock_quantity =
+  stock_quantity - :qty WHERE id = :id AND stock_quantity >= :qty`. Zero
+  rows affected means insufficient stock → `409 Conflict`. Because the
+  arithmetic happens in the database against the row's current value —
+  never read into application memory first — there is no window for a
+  concurrent request to read a stale value and compute a conflicting
+  result (the classic lost-update problem a load-then-`SaveChanges()`
+  pattern is exposed to). Postgres's row-level lock during the statement
+  itself is sufficient; no explicit transaction, long-held lock, or
+  `SERIALIZABLE` isolation is needed — the statement is atomic on its own.
 - **General field edits** (name, price, category, etc.): optimistic
   concurrency via Postgres's native `xmin` system column, exposed to EF Core
   as a concurrency token. Conflicting concurrent edits return `409` with the
@@ -191,13 +202,18 @@ Four projects, dependencies pointing inward only:
 - **`ProductManagement.Application`** — use cases (e.g.
   `CreateProductHandler`, `AdjustStockHandler`), request/response DTOs,
   FluentValidation validators, and the interfaces the use cases depend on
-  (`IProductRepository`, `IStockRepository`, `ICacheService`). Depends only on
-  Domain. This is where business rules and orchestration live — no SQL, no
-  HTTP.
+  (`IProductRepository`, `IStockRepository`, `ICategoryRepository`,
+  `ICacheService`, `IUnitOfWork`). Depends only on Domain. This is where
+  business rules and orchestration live — no SQL, no HTTP.
 - **`ProductManagement.Infrastructure`** — EF Core `DbContext` + entity
-  configurations + migrations, repository implementations (including the raw
-  SQL atomic stock UPDATE), Redis-backed `ICacheService` implementation.
-  Depends on Application (implements its interfaces) and Domain.
+  configurations + migrations, repository implementations, the
+  `ExecuteUpdateAsync`-based atomic stock update, an `IUnitOfWork`
+  implementation wrapping the `DbContext` (EF Core's `DbContext` already
+  tracks multiple entities and commits them together via `SaveChangesAsync`,
+  so `IUnitOfWork` here is a thin Application-facing interface over that
+  existing behavior — not a second change-tracking layer), Redis-backed
+  `ICacheService` implementation. Depends on Application (implements its
+  interfaces) and Domain.
 - **`ProductManagement.Api`** — controllers, middleware (`ProblemDetails`
   error mapping, API-key auth), Swashbuckle setup, and the composition root
   (`Program.cs`) that wires Infrastructure implementations to Application
@@ -209,6 +225,16 @@ of business logic, so the atomic-stock-update rule and validation logic are
 unit-testable without a running web host or a real database, and swapping
 Postgres or Redis later wouldn't ripple into Application or Domain.
 
+**Where `IUnitOfWork` is used, and where it isn't**: use cases that write
+across more than one repository in a single logical operation — e.g.
+`CreateProductHandler`, which creates a product and its initial
+`variants[]` together — call `IUnitOfWork.SaveChangesAsync()` once after
+both repository calls, so either both persist or neither does.
+`AdjustStockHandler` (§3.3) deliberately does **not** go through
+`IUnitOfWork` — its `ExecuteUpdateAsync` call is already a single atomic
+statement against one row, so wrapping it in a unit-of-work transaction
+would add overhead without adding any correctness it doesn't already have.
+
 **Test project layout mirrors this split**: `ProductManagement.UnitTests`
 (Domain + Application, no I/O, fast) and `ProductManagement.IntegrationTests`
 (Testcontainers-backed, exercises the real Postgres atomic-UPDATE and
@@ -218,9 +244,15 @@ concurrency behavior end-to-end).
 
 - **Framework**: ASP.NET Core Web API (.NET 10)
 - **ORM**: EF Core (Npgsql provider) — code-first migrations; `xmin` as
-  native concurrency token; the stock UPDATE is raw SQL via
-  `ExecuteSqlInterpolatedAsync` since it must be a single hand-written atomic
-  statement, not LINQ-generated.
+  native concurrency token; the stock update uses EF Core's
+  `ExecuteUpdateAsync` bulk-update API (§3.3) for a LINQ-expressed, still
+  fully-atomic conditional update — no hand-written/raw SQL anywhere in the
+  codebase.
+- **Persistence coordination**: Repository pattern (`IProductRepository`,
+  `IVariantRepository`, `ICategoryRepository` in Application, implemented in
+  Infrastructure) plus a thin `IUnitOfWork` over `DbContext.SaveChangesAsync`
+  for use cases that must commit writes across more than one repository
+  atomically (§5).
 - **Validation**: FluentValidation — one validator per request DTO. Chosen
   over DataAnnotations because several rules are cross-field (e.g.
   `compare_at_price >= price`), which DataAnnotations handles awkwardly.
