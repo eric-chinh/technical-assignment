@@ -1,7 +1,27 @@
 import { http, HttpResponse } from 'msw';
 import type { Category } from '../features/categories/types';
+import type { Product, ProductListItem } from '../features/products/types';
 
 const baseUrl = 'http://localhost:8080/api/v1';
+
+function initialMockProducts(): Product[] {
+  return [
+    {
+      id: 1, name: 'Classic Cotton Tee', slug: 'classic-cotton-tee', description: null,
+      categoryId: 2, brand: 'Acme', status: 'Active', attributes: '{}', imageUrl: null,
+      variants: [{ id: 1, sku: 'TEE-M', size: 'M', color: 'Blue', price: 20, compareAtPrice: null, stockQuantity: 50, barcode: null, isActive: true }],
+    },
+  ];
+}
+
+export let mockProducts: Product[] = initialMockProducts();
+
+// Mirrors resetMockCategories (Task 4) - every test file whose handlers mutate
+// mockProducts (create/update/stock-adjust/image/delete) must call this before
+// each test, or state leaks across tests within the same Vitest run.
+export function resetMockProducts(): void {
+  mockProducts = initialMockProducts();
+}
 
 export let mockCategories: Category[] = [
   { id: 1, name: 'Women', slug: 'women', parentCategoryId: null, displayOrder: 0, isActive: true },
@@ -35,5 +55,23 @@ export const handlers = [
     if (id === 1) return HttpResponse.json({ title: 'Category has active products.', status: 409 }, { status: 409 });
     mockCategories = mockCategories.filter((c) => c.id !== id);
     return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.get(`${baseUrl}/products`, ({ request }) => {
+    const url = new URL(request.url);
+    const q = url.searchParams.get('q');
+    const filtered = q ? mockProducts.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())) : mockProducts;
+    const items: ProductListItem[] = filtered.map((p) => ({
+      id: p.id, name: p.name, slug: p.slug, categoryId: p.categoryId, brand: p.brand, status: p.status,
+      minPrice: p.variants[0]?.price ?? null, maxPrice: p.variants[0]?.price ?? null,
+      totalStock: p.variants.reduce((sum, v) => sum + v.stockQuantity, 0), imageUrl: p.imageUrl,
+    }));
+    return HttpResponse.json({ items, nextCursor: null, hasMore: false });
+  }),
+
+  http.get(`${baseUrl}/products/:id`, ({ params }) => {
+    const product = mockProducts.find((p) => p.id === Number(params.id));
+    if (!product) return new HttpResponse(null, { status: 404 });
+    return HttpResponse.json(product, { headers: { ETag: '"1"' } });
   }),
 ];
