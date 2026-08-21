@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Table, Button, Space, message } from 'antd';
+import { Table, Button, Space, Popconfirm, message } from 'antd';
 import { useAdjustStockMutation, useDeleteVariantMutation } from './api';
 import type { Variant } from './types';
 import type { AppError } from '../../shared/lib/errors';
@@ -29,6 +29,15 @@ export const VariantsTable = memo(function VariantsTable({ productId, variants }
     }
   }
 
+  async function handleDelete(variantId: number) {
+    try {
+      await deleteVariant({ productId, variantId }).unwrap();
+      message.success('Variant deleted.');
+    } catch (err) {
+      message.error((err as AppError).message);
+    }
+  }
+
   const columns = [
     { title: 'SKU', dataIndex: 'sku', key: 'sku' },
     { title: 'Size/Color', key: 'variant', render: (_: unknown, v: Variant) => [v.size, v.color].filter(Boolean).join(' / ') || '—' },
@@ -52,12 +61,19 @@ export const VariantsTable = memo(function VariantsTable({ productId, variants }
       title: '',
       key: 'actions',
       render: (_: unknown, v: Variant) => (
-        <Button type="link" danger onClick={() => deleteVariant({ productId, variantId: v.id })}>
-          Delete
-        </Button>
+        <Popconfirm title="Delete this variant?" onConfirm={() => handleDelete(v.id)}>
+          <Button type="link" danger>
+            Delete
+          </Button>
+        </Popconfirm>
       ),
     },
   ];
 
-  return <Table rowKey="id" columns={columns} dataSource={variants} pagination={false} size="small" />;
+  // The backend soft-deletes a variant (isActive = false) rather than removing the
+  // row - GetProduct still returns it, so a deleted variant must be filtered out here
+  // or the "Delete" action would appear to do nothing.
+  const activeVariants = variants.filter((v) => v.isActive);
+
+  return <Table rowKey="id" columns={columns} dataSource={activeVariants} pagination={false} size="small" />;
 });

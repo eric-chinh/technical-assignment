@@ -58,4 +58,19 @@ describe('ProductDetailPage', () => {
     // re-renders this same component in edit mode showing the just-created product.
     expect(await screen.findByText('New Jacket')).toBeInTheDocument();
   });
+
+  it('has a Cancel button that navigates away without saving', async () => {
+    resetMockProducts();
+    renderAt('/products/new');
+    await screen.findByText('New Product');
+
+    await userEvent.type(screen.getByLabelText('Name'), 'Abandoned Draft');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    // Neither route registered in this test matches "/products" (list page lives
+    // elsewhere in the real router) - its absence confirms navigation actually
+    // happened, rather than the button being a no-op that leaves the form in place.
+    expect(screen.queryByText('Abandoned Draft')).not.toBeInTheDocument();
+    expect(screen.queryByText('New Product')).not.toBeInTheDocument();
+  });
 });

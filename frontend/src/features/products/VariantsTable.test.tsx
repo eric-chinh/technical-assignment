@@ -46,4 +46,25 @@ describe('VariantsTable', () => {
 
     expect(await screen.findByText(/only 0 left/i)).toBeInTheDocument();
   });
+
+  it('deleting a variant requires confirmation, then fires the request and confirms success', async () => {
+    resetMockProducts();
+    renderTable([variant]);
+
+    await userEvent.click(screen.getByText('Delete'));
+    // Popconfirm doesn't fire the mutation until the user confirms - clicking Delete alone must not be enough.
+    expect(screen.queryByText('Variant deleted.')).not.toBeInTheDocument();
+
+    await userEvent.click(await screen.findByRole('button', { name: /ok|yes/i }));
+
+    expect(await screen.findByText('Variant deleted.')).toBeInTheDocument();
+  });
+
+  it('does not display a variant the backend has soft-deleted (isActive: false)', () => {
+    resetMockProducts();
+    const deletedVariant = { ...variant, isActive: false };
+    renderTable([deletedVariant]);
+
+    expect(screen.queryByText('TEE-M')).not.toBeInTheDocument();
+  });
 });

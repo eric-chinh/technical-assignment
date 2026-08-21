@@ -110,6 +110,14 @@ export const handlers = [
     return HttpResponse.json(created, { status: 201 });
   }),
 
+  http.delete(`${baseUrl}/products/:productId/variants/:variantId`, ({ params }) => {
+    const product = mockProducts.find((p) => p.id === Number(params.productId));
+    const variant = product?.variants.find((v) => v.id === Number(params.variantId));
+    if (!variant) return new HttpResponse(null, { status: 404 });
+    variant.isActive = false; // soft delete, mirrors the real backend's Variant.Deactivate()
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   http.patch(`${baseUrl}/products/:productId/variants/:variantId/stock`, async ({ params, request }) => {
     const product = mockProducts.find((p) => p.id === Number(params.productId));
     const variant = product?.variants.find((v) => v.id === Number(params.variantId));

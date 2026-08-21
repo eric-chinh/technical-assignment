@@ -98,9 +98,14 @@ export function ProductForm({ product }: Props) {
         <Form.Item name="description" label="Description">
           <Input.TextArea rows={3} />
         </Form.Item>
-        <Button type="primary" htmlType="submit" loading={creating || updating}>
-          Save
-        </Button>
+        <Form.Item style={{ marginBottom: 0 }}>
+          <Button type="primary" htmlType="submit" loading={creating || updating}>
+            Save
+          </Button>
+          <Button onClick={() => navigate('/products')} style={{ marginLeft: 8 }}>
+            Cancel
+          </Button>
+        </Form.Item>
       </Form>
 
       <Modal
