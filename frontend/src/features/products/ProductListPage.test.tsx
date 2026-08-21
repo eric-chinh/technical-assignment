@@ -41,6 +41,13 @@ describe('ProductListPage', () => {
     expect(image).toHaveAttribute('src', '/product-placeholder.svg');
   });
 
+  it('shows the total count and page number', async () => {
+    resetMockProducts();
+    renderPage();
+
+    expect(await screen.findByText('Showing 1–1 of 1 products · Page 1 of 1')).toBeInTheDocument();
+  });
+
   it('shows the empty state when a search matches nothing', async () => {
     resetMockProducts();
     renderPage();
@@ -49,6 +56,7 @@ describe('ProductListPage', () => {
     await userEvent.type(screen.getByPlaceholderText('Search products...'), 'nonexistent-product-xyz');
 
     expect(await screen.findByText(/no products match these filters/i)).toBeInTheDocument();
+    expect(await screen.findByText('No products')).toBeInTheDocument();
   });
 
   it('shows a retry-able error state, not a blank table, when the API is unreachable', async () => {

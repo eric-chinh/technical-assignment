@@ -92,9 +92,34 @@ public class ProductsEndpointsTests : IAsyncLifetime
         page!.Items.Should().ContainSingle(p => p.Name == "Blue Denim Jacket");
     }
 
+    [Fact]
+    public async Task ListProducts_ReturnsTotalCount_StableAcrossPages()
+    {
+        var categoryId = await CreateCategoryAsync("tops-5");
+        for (var i = 0; i < 3; i++)
+        {
+            await _client.PostAsJsonAsync("/api/v1/products", new
+            { name = $"Paged Item {i}", slug = $"paged-item-{i}", categoryId, brand = (string?)null, variants = Array.Empty<object>() });
+        }
+
+        var firstPage = await _client.GetAsync($"/api/v1/products?categoryId={categoryId}&limit=2");
+        var firstPageBody = await firstPage.Content.ReadFromJsonAsync<PagedRef>();
+
+        firstPageBody!.TotalCount.Should().Be(3);
+        firstPageBody.HasMore.Should().BeTrue();
+
+        var encodedCursor = Uri.EscapeDataString(firstPageBody.NextCursor!);
+        var secondPage = await _client.GetAsync($"/api/v1/products?categoryId={categoryId}&limit=2&cursor={encodedCursor}");
+        var secondPageBody = await secondPage.Content.ReadFromJsonAsync<PagedRef>();
+
+        // Total count reflects all matching rows, not just what's left after paging -
+        // it must not shrink from page to page.
+        secondPageBody!.TotalCount.Should().Be(3);
+    }
+
     private sealed record CategoryRef(long Id);
     private sealed record VariantRef(long Id, string Sku);
     private sealed record ProductRef(long Id, string Name, List<VariantRef> Variants);
     private sealed record ProductListItemRef(long Id, string Name);
-    private sealed record PagedRef(List<ProductListItemRef> Items, string? NextCursor, bool HasMore);
+    private sealed record PagedRef(List<ProductListItemRef> Items, string? NextCursor, bool HasMore, long TotalCount);
 }

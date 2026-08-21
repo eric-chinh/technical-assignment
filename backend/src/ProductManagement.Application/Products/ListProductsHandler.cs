@@ -35,7 +35,7 @@ public class ListProductsHandler
 
         var page = await _products.ListAsync(query, ct);
         var result = new PagedResult<ProductListItemDto>(
-            page.Items.Select(p => p.ToListItemDto()).ToList(), page.NextCursor, page.HasMore);
+            page.Items.Select(p => p.ToListItemDto()).ToList(), page.NextCursor, page.HasMore, page.TotalCount);
 
         await _cache.SetAsync(cacheKey, result, ListTtl, ct);
         return result;

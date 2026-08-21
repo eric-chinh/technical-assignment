@@ -41,9 +41,15 @@ public class ProductRepository : IProductRepository
         if (!string.IsNullOrWhiteSpace(query.SearchText))
         {
             var searchText = query.SearchText;
-            var ranked = baseQuery
+            var matchedQuery = baseQuery
                 .Where(p => EF.Property<NpgsqlTypes.NpgsqlTsVector>(p, "SearchVector")
-                    .Matches(EF.Functions.WebSearchToTsQuery("english", searchText)))
+                    .Matches(EF.Functions.WebSearchToTsQuery("english", searchText)));
+
+            // Total count over the filter + full-text match, before the cursor's rank
+            // paging window - so it stays stable across pages instead of shrinking.
+            var searchTotalCount = await matchedQuery.LongCountAsync(ct);
+
+            var ranked = matchedQuery
                 .Select(p => new
                 {
                     Product = p,
@@ -62,12 +68,13 @@ public class ProductRepository : IProductRepository
             if (rankedResults.Count == 0)
             {
                 // Full-text found nothing -> trigram typo-tolerant fallback (spec section 3.3)
-                var trigramMatches = await baseQuery
-                    .Where(p => EF.Functions.TrigramsSimilarity(p.Name, query.SearchText) > 0.1)
+                var trigramQuery = baseQuery.Where(p => EF.Functions.TrigramsSimilarity(p.Name, query.SearchText) > 0.1);
+                var trigramTotalCount = await trigramQuery.LongCountAsync(ct);
+                var trigramMatches = await trigramQuery
                     .OrderByDescending(p => EF.Functions.TrigramsSimilarity(p.Name, query.SearchText))
                     .Take(query.Limit)
                     .ToListAsync(ct);
-                return new PagedResult<Product>(trigramMatches, null, false);
+                return new PagedResult<Product>(trigramMatches, null, false, trigramTotalCount);
             }
 
             var hasMore = rankedResults.Count > query.Limit;
@@ -76,8 +83,12 @@ public class ProductRepository : IProductRepository
             var nextCursor = hasMore && last is not null
                 ? new ProductCursor(null, rankedResults[query.Limit - 1].Rank, last.Product.Id).Encode()
                 : null;
-            return new PagedResult<Product>(page.Select(x => x.Product).ToList(), nextCursor, hasMore);
+            return new PagedResult<Product>(page.Select(x => x.Product).ToList(), nextCursor, hasMore, searchTotalCount);
         }
+
+        // Total count over the filters, before the cursor's created_at paging window -
+        // so it stays stable across pages instead of shrinking as you page forward.
+        var totalCount = await baseQuery.LongCountAsync(ct);
 
         if (decodedCursor?.CreatedAt is { } afterCreatedAt)
             baseQuery = baseQuery.Where(p => p.CreatedAt < afterCreatedAt || (p.CreatedAt == afterCreatedAt && p.Id < decodedCursor.Id));
@@ -93,6 +104,6 @@ public class ProductRepository : IProductRepository
         var cursor = moreExists && lastItem is not null
             ? new ProductCursor(lastItem.CreatedAt, null, lastItem.Id).Encode()
             : null;
-        return new PagedResult<Product>(pageItems, cursor, moreExists);
+        return new PagedResult<Product>(pageItems, cursor, moreExists, totalCount);
     }
 }

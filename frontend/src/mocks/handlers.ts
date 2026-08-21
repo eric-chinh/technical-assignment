@@ -66,7 +66,7 @@ export const handlers = [
       minPrice: p.variants[0]?.price ?? null, maxPrice: p.variants[0]?.price ?? null,
       totalStock: p.variants.reduce((sum, v) => sum + v.stockQuantity, 0), imageUrl: p.imageUrl,
     }));
-    return HttpResponse.json({ items, nextCursor: null, hasMore: false });
+    return HttpResponse.json({ items, nextCursor: null, hasMore: false, totalCount: filtered.length });
   }),
 
   http.get(`${baseUrl}/products/:id`, ({ params }) => {

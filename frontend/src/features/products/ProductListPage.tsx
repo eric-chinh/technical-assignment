@@ -9,6 +9,7 @@ import { resolveImageUrl } from '../../shared/lib/resolveImageUrl';
 import type { ProductListItem } from './types';
 
 const PRODUCT_PLACEHOLDER_IMAGE = '/product-placeholder.svg';
+const PAGE_SIZE = 20;
 
 export function ProductListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -27,8 +28,14 @@ export function ProductListPage() {
     q: debouncedQ || undefined,
     categoryId,
     cursor,
-    limit: 20,
+    limit: PAGE_SIZE,
   });
+
+  const currentPage = cursorStack.length + 1;
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const rangeStart = totalCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = rangeStart + (data?.items.length ?? 0) - 1;
 
   function updateParam(key: string, value: string | undefined) {
     const next = new URLSearchParams(searchParams);
@@ -149,13 +156,20 @@ export function ProductListPage() {
           onMouseEnter: () => prefetchProduct(record.id),
         })}
       />
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-        <Button disabled={cursorStack.length === 0} onClick={handlePrevious}>
-          Previous
-        </Button>
-        <Button disabled={!data?.hasMore} onClick={handleNext}>
-          Next
-        </Button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 16 }}>
+        <span>
+          {totalCount === 0
+            ? 'No products'
+            : `Showing ${rangeStart}–${rangeEnd} of ${totalCount} products · Page ${currentPage} of ${totalPages}`}
+        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button disabled={cursorStack.length === 0} onClick={handlePrevious}>
+            Previous
+          </Button>
+          <Button disabled={!data?.hasMore} onClick={handleNext}>
+            Next
+          </Button>
+        </div>
       </div>
     </div>
   );
