@@ -5,6 +5,7 @@ using ProductManagement.Application.Common.Interfaces;
 using ProductManagement.Infrastructure.Caching;
 using ProductManagement.Infrastructure.Persistence;
 using ProductManagement.Infrastructure.Persistence.Repositories;
+using ProductManagement.Infrastructure.Storage;
 using StackExchange.Redis;
 
 namespace ProductManagement.Infrastructure;
@@ -25,6 +26,8 @@ public static class DependencyInjection
         services.AddScoped<IVariantRepository, VariantRepository>();
         services.AddScoped<ICacheService, RedisCacheService>();
         services.AddScoped<IStockRepository, StockRepository>();
+        services.AddScoped<IFileStorageService>(_ =>
+            new LocalFileStorageService(config["Uploads:RootPath"] ?? "wwwroot/uploads"));
 
         return services;
     }

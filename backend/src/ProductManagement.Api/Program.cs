@@ -18,6 +18,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseStaticFiles(); // serves wwwroot/uploads at /uploads (spec section 10)
+
 app.MapControllers();
 
 app.Run();

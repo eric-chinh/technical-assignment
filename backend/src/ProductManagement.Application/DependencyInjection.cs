@@ -20,6 +20,8 @@ public static class DependencyInjection
         services.AddScoped<Products.DeleteProductHandler>();
         services.AddScoped<Products.GetProductHandler>();
         services.AddScoped<Products.ListProductsHandler>();
+        services.AddScoped<Products.UploadProductImageHandler>();
+        services.AddScoped<Products.DeleteProductImageHandler>();
 
         services.AddScoped<Variants.CreateVariantHandler>();
         services.AddScoped<Variants.UpdateVariantHandler>();

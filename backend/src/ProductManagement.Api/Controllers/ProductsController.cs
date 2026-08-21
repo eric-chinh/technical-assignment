@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
 using ProductManagement.Application.Products;
@@ -54,6 +55,23 @@ public class ProductsController : ControllerBase
 
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete([FromServices] DeleteProductHandler handler, long id, CancellationToken ct)
+    {
+        await handler.HandleAsync(id, ct);
+        return NoContent();
+    }
+
+    [HttpPost("{id:long}/image")]
+    public async Task<IActionResult> UploadImage(
+        [FromServices] UploadProductImageHandler handler, long id, IFormFile file, CancellationToken ct)
+    {
+        await using var stream = file.OpenReadStream();
+        var url = await handler.HandleAsync(id, stream, file.FileName, file.ContentType, file.Length, ct);
+        return Ok(new { imageUrl = url });
+    }
+
+    [HttpDelete("{id:long}/image")]
+    public async Task<IActionResult> DeleteImage(
+        [FromServices] DeleteProductImageHandler handler, long id, CancellationToken ct)
     {
         await handler.HandleAsync(id, ct);
         return NoContent();
