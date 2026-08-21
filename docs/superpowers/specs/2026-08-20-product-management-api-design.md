@@ -243,7 +243,8 @@ concurrency behavior end-to-end).
 ## 6. Technology Stack
 
 - **Framework**: ASP.NET Core Web API (.NET 10)
-- **ORM**: EF Core (Npgsql provider) — code-first migrations; `xmin` as
+- **ORM**: EF Core 10 (`Microsoft.EntityFrameworkCore*` 10.0.11,
+  `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3) — code-first migrations; `xmin` as
   native concurrency token; the stock update uses EF Core's
   `ExecuteUpdateAsync` bulk-update API (§3.3) for a LINQ-expressed, still
   fully-atomic conditional update — no hand-written/raw SQL anywhere in the
