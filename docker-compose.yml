@@ -45,6 +45,14 @@ services:
       redis:
         condition: service_healthy
 
+  web:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
 volumes:
   postgres_data:
   uploads_data:

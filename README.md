@@ -49,3 +49,36 @@ Import `postman/ProductManagement.postman_collection.json` and
 No authentication (all endpoints public — see spec §10/§11), local-disk
 image storage (not real blob storage), no CI/CD pipeline. Full list in the
 design spec's Limitations section.
+
+## Front-end
+
+See `docs/superpowers/specs/2026-08-21-product-management-frontend-design.md`
+for the full design rationale.
+
+### Active front-end development (hot reload)
+
+    docker compose up postgres redis api    # web deliberately NOT started - avoids a port clash
+    cd frontend
+    npm install
+    npm run dev
+
+Open http://localhost:5173 (Vite's dev server).
+
+### Running front-end tests
+
+    cd frontend
+    npm test
+
+Needs nothing running — MSW mocks every API call.
+
+### Front-end environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `VITE_API_BASE_URL` | `http://localhost:8080/api/v1` | Backend API base URL (browser-reachable, not the Docker-internal hostname) |
+
+### Front-end known limitations
+
+No login UI (mirrors the backend's no-auth decision), no real-time updates
+(another user's stock change isn't reflected until refetch), no E2E test
+suite (unit/component coverage only), no i18n, default antd theme.
