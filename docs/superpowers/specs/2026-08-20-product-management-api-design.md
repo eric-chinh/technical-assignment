@@ -235,10 +235,12 @@ statement against one row, so wrapping it in a unit-of-work transaction
 would add overhead without adding any correctness it doesn't already have.
 
 **Test project layout mirrors this split**: `ProductManagement.UnitTests`
-(Domain + Application, no I/O, fast) and `ProductManagement.IntegrationTests`
+(Domain + Application, no I/O, fast), `ProductManagement.IntegrationTests`
 (targets the real Postgres/Redis started by `docker-compose.yml` — see §10
 — exercising the atomic stock update and concurrency behavior end-to-end
-against the same services used for manual local testing, no Testcontainers).
+against the same services used for manual local testing, no Testcontainers),
+and `ProductManagement.ArchitectureTests` (below) — three projects, three
+different things being verified.
 
 **`ProductManagement.UnitTests` scope** — everything here runs with no
 database, no cache, no network, so the suite stays fast enough to run on
@@ -266,6 +268,50 @@ Postgres/Redis to mean anything, and live in `IntegrationTests` instead:
 the actual `ExecuteUpdateAsync` atomic behavior, EF Core query translation,
 real Redis cache behavior. This is exactly why §3.3's concurrency guarantee
 is proven at the integration layer, not mocked away.
+
+### Architecture Tests — Enforcing the Dependency Rule
+
+§5's "dependencies pointing inward only" rule is a design intent, not
+something the compiler enforces on its own — nothing stops a future change
+from adding a stray `using Microsoft.EntityFrameworkCore;` to a `Domain`
+entity for convenience. Rather than rely on code review catching that every
+time, `ProductManagement.ArchitectureTests` asserts the dependency graph
+itself, using **`NetArchTest.Rules`** (reflects over compiled assemblies via
+Mono.Cecil, integrates with xUnit like any other test):
+
+```csharp
+[Fact]
+public void Domain_Should_Not_Depend_On_Other_Layers()
+{
+    var result = Types.InAssembly(typeof(Product).Assembly)
+        .Should()
+        .NotHaveDependencyOnAny(
+            "Microsoft.EntityFrameworkCore", "Microsoft.AspNetCore",
+            "ProductManagement.Application", "ProductManagement.Infrastructure")
+        .GetResult();
+
+    result.IsSuccessful.Should().BeTrue();
+}
+```
+
+Rules asserted, one test per rule:
+- `Domain` → no dependency on `Application`, `Infrastructure`, `Api`, EF
+  Core, or ASP.NET Core
+- `Application` → no dependency on `Infrastructure`, `Api`, EF Core, or
+  ASP.NET Core
+- `Infrastructure` → no dependency on `Api`
+- Controllers in `Api` → no direct dependency on `Infrastructure` (catches
+  a controller injecting a `DbContext` or a concrete repository instead of
+  an Application interface — the exact mistake §5's "controllers depend
+  only on Application" rule is meant to prevent)
+
+This project necessarily references all four layer assemblies (`Domain`,
+`Application`, `Infrastructure`, `Api`) to inspect the dependency graph
+between them — unlike `UnitTests`, which by design only references
+`Domain`+`Application`. These tests run alongside `UnitTests` in the normal
+`dotnet test` pass — no database, no Docker, just reflection over the built
+assemblies — so a dependency-rule violation fails fast, the same run that
+would catch a broken unit test.
 
 ### Dependency Injection & Composition Root
 
@@ -340,7 +386,8 @@ references a concrete EF Core or Redis type.
   (fire N parallel stock-decrement requests, assert stock never goes
   negative and exactly the right number of requests succeed) — that
   guarantee is only meaningful proven against a real Postgres instance, not
-  an in-memory fake.
+  an in-memory fake. `NetArchTest.Rules` enforces the Clean Architecture
+  dependency rule itself as a third, always-run test category (§5).
 - **API docs**: Swashbuckle (OpenAPI/Swagger UI) generated from code, plus a
   separately maintained Postman collection for the submission.
 
