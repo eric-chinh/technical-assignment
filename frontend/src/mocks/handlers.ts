@@ -95,4 +95,32 @@ export const handlers = [
     Object.assign(product, body);
     return HttpResponse.json(product, { headers: { ETag: '"1"' } });
   }),
+
+  http.post(`${baseUrl}/products/:productId/variants`, async ({ params, request }) => {
+    const product = mockProducts.find((p) => p.id === Number(params.productId));
+    if (!product) return new HttpResponse(null, { status: 404 });
+    const body = (await request.json()) as { sku: string; size: string | null; color: string | null; price: number; stockQuantity: number };
+    if (product.variants.some((v) => v.sku === body.sku)) {
+      return HttpResponse.json({ title: 'SKU already exists.', status: 409 }, { status: 409 });
+    }
+    const created = { id: product.variants.length + 100, compareAtPrice: null, barcode: null, isActive: true, ...body };
+    product.variants.push(created);
+    return HttpResponse.json(created, { status: 201 });
+  }),
+
+  http.patch(`${baseUrl}/products/:productId/variants/:variantId/stock`, async ({ params, request }) => {
+    const product = mockProducts.find((p) => p.id === Number(params.productId));
+    const variant = product?.variants.find((v) => v.id === Number(params.variantId));
+    if (!variant) return new HttpResponse(null, { status: 404 });
+    const { delta } = (await request.json()) as { delta: number };
+
+    if (delta < 0 && variant.stockQuantity + delta < 0) {
+      return HttpResponse.json(
+        { succeeded: false, newQuantity: null, availableQuantity: variant.stockQuantity },
+        { status: 409 },
+      );
+    }
+    variant.stockQuantity += delta;
+    return HttpResponse.json({ succeeded: true, newQuantity: variant.stockQuantity, availableQuantity: null });
+  }),
 ];

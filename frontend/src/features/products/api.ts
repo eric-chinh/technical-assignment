@@ -1,5 +1,14 @@
 import { api } from '../../shared/lib/apiBase';
-import type { Product, ProductListItem, PagedResult, CreateProductRequest, UpdateProductRequest } from './types';
+import type {
+  Product,
+  ProductListItem,
+  PagedResult,
+  CreateProductRequest,
+  UpdateProductRequest,
+  Variant,
+  CreateVariantRequest,
+  AdjustStockResult,
+} from './types';
 
 export interface ListProductsParams {
   categoryId?: number;
@@ -33,6 +42,37 @@ export const productsApi = api.injectEndpoints({
       query: (id) => ({ url: `/products/${id}`, method: 'DELETE' }),
       invalidatesTags: ['ProductList'],
     }),
+    createVariant: builder.mutation<Variant, { productId: number; body: CreateVariantRequest }>({
+      query: ({ productId, body }) => ({ url: `/products/${productId}/variants`, method: 'POST', data: body }),
+      invalidatesTags: (_result, _error, { productId }) => [{ type: 'Product', id: productId }],
+    }),
+    deleteVariant: builder.mutation<void, { productId: number; variantId: number }>({
+      query: ({ productId, variantId }) => ({ url: `/products/${productId}/variants/${variantId}`, method: 'DELETE' }),
+      invalidatesTags: (_result, _error, { productId }) => [{ type: 'Product', id: productId }],
+    }),
+    adjustStock: builder.mutation<AdjustStockResult, { productId: number; variantId: number; delta: number }>({
+      query: ({ productId, variantId, delta }) => ({
+        url: `/products/${productId}/variants/${variantId}/stock`,
+        method: 'PATCH',
+        data: { delta },
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+      }),
+      async onQueryStarted({ productId, variantId, delta }, { dispatch, queryFulfilled }) {
+        // Instant UI feedback (spec section 5) - the cached stock number updates before
+        // the network round-trip completes, then rolls back automatically on failure.
+        const patch = dispatch(
+          productsApi.util.updateQueryData('getProduct', productId, (draft) => {
+            const variant = draft.variants.find((v) => v.id === variantId);
+            if (variant) variant.stockQuantity += delta;
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+    }),
   }),
 });
 
@@ -42,4 +82,7 @@ export const {
   useCreateProductMutation,
   useUpdateProductMutation,
   useDeleteProductMutation,
+  useCreateVariantMutation,
+  useDeleteVariantMutation,
+  useAdjustStockMutation,
 } = productsApi;

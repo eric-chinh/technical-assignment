@@ -69,3 +69,9 @@ export interface UpdateProductRequest {
   brand: string | null;
   attributes: string;
 }
+
+export interface AdjustStockResult {
+  succeeded: boolean;
+  newQuantity: number | null;
+  availableQuantity: number | null;
+}
