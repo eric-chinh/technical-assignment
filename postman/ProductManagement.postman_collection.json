@@ -1,0 +1,185 @@
+{
+  "info": {
+    "name": "Product Management API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "Create Category",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "const body = pm.response.json();",
+            "pm.collectionVariables.set('categoryId', body.id);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Dresses\",\n  \"slug\": \"dresses\",\n  \"parentCategoryId\": null,\n  \"displayOrder\": 0\n}" },
+            "url": { "raw": "{{baseUrl}}/categories", "host": ["{{baseUrl}}"], "path": ["categories"] }
+          }
+        },
+        {
+          "name": "Create Category - Duplicate Slug (409)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('409 Conflict', () => pm.response.to.have.status(409));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Dresses\",\n  \"slug\": \"dresses\",\n  \"parentCategoryId\": null,\n  \"displayOrder\": 0\n}" },
+            "url": { "raw": "{{baseUrl}}/categories", "host": ["{{baseUrl}}"], "path": ["categories"] }
+          }
+        },
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/categories", "host": ["{{baseUrl}}"], "path": ["categories"] }
+          }
+        },
+        {
+          "name": "Delete Category - Blocked by Active Products (409)",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/categories/{{categoryId}}", "host": ["{{baseUrl}}"], "path": ["categories", "{{categoryId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "Create Product With Initial Variant",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "const body = pm.response.json();",
+            "pm.collectionVariables.set('productId', body.id);",
+            "pm.collectionVariables.set('variantId', body.variants[0].id);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Classic Cotton Tee\",\n  \"slug\": \"classic-cotton-tee\",\n  \"categoryId\": {{categoryId}},\n  \"brand\": \"Acme\",\n  \"variants\": [\n    { \"sku\": \"TEE-M-BLU\", \"size\": \"M\", \"color\": \"Blue\", \"price\": 20.00, \"stockQuantity\": 50 }\n  ]\n}" },
+            "url": { "raw": "{{baseUrl}}/products", "host": ["{{baseUrl}}"], "path": ["products"] }
+          }
+        },
+        {
+          "name": "Get Product By Id (captures ETag)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.collectionVariables.set('productEtag', pm.response.headers.get('ETag'));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}"] }
+          }
+        },
+        {
+          "name": "List Products - Full-Text Search",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/products?q=cotton", "host": ["{{baseUrl}}"], "path": ["products"], "query": [{ "key": "q", "value": "cotton" }] }
+          }
+        },
+        {
+          "name": "Update Product (uses ETag as If-Match)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "If-Match", "value": "{{productEtag}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Classic Cotton Tee (Updated)\",\n  \"description\": null,\n  \"categoryId\": {{categoryId}},\n  \"brand\": \"Acme\",\n  \"attributes\": \"{}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}"] }
+          }
+        },
+        {
+          "name": "Update Product - Stale ETag (409)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "If-Match", "value": "\"0\"" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Should Conflict\",\n  \"description\": null,\n  \"categoryId\": {{categoryId}},\n  \"brand\": null,\n  \"attributes\": \"{}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Variants & Stock",
+      "item": [
+        {
+          "name": "Adjust Stock - Decrement",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"delta\": -3 }" },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/variants/{{variantId}}/stock",
+              "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}", "variants", "{{variantId}}", "stock"]
+            }
+          }
+        },
+        {
+          "name": "Adjust Stock - Insufficient Stock (409)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"delta\": -999999 }" },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/variants/{{variantId}}/stock",
+              "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}", "variants", "{{variantId}}", "stock"]
+            }
+          }
+        },
+        {
+          "name": "Adjust Stock - With Idempotency-Key",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{ \"delta\": -1 }" },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/variants/{{variantId}}/stock",
+              "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}", "variants", "{{variantId}}", "stock"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Images",
+      "item": [
+        {
+          "name": "Upload Product Image",
+          "request": {
+            "method": "POST",
+            "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "" }] },
+            "url": { "raw": "{{baseUrl}}/products/{{productId}}/image", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}", "image"] }
+          }
+        },
+        {
+          "name": "Delete Product Image - None Set (404)",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/products/999999/image", "host": ["{{baseUrl}}"], "path": ["products", "999999", "image"] }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "categoryId", "value": "" },
+    { "key": "productId", "value": "" },
+    { "key": "variantId", "value": "" },
+    { "key": "productEtag", "value": "" }
+  ]
+}
