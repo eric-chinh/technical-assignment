@@ -17,9 +17,8 @@ scope during design review — image handling adds no new insight into the
 consistency/scalability story this assessment is testing).
 
 **Depth target**: take-home realistic scope — fully working API, DB, and tests for
-the in-scope features; auth is a minimal stand-in (single API key), not a full
-identity system; no CI/CD pipeline. Both are documented as future improvements
-rather than built.
+the in-scope features; no authentication/authorization or CI/CD pipeline. Both
+are documented as future improvements rather than built (see §11).
 
 ## 2. Development Approach
 
@@ -215,7 +214,7 @@ Four projects, dependencies pointing inward only:
   `ICacheService` implementation. Depends on Application (implements its
   interfaces) and Domain.
 - **`ProductManagement.Api`** — controllers, middleware (`ProblemDetails`
-  error mapping, API-key auth), Swashbuckle setup, and the composition root
+  error mapping), Swashbuckle setup, and the composition root
   (`Program.cs`) that wires Infrastructure implementations to Application
   interfaces via DI. Controllers depend only on Application (use cases/DTOs)
   — never directly on EF Core or Infrastructure types.
@@ -260,9 +259,6 @@ concurrency behavior end-to-end).
 - **Mapping**: manual extension methods (`ToDto()` / `ToEntity()`) — the
   entity/DTO shape difference is small enough that AutoMapper/Mapster would
   add indirection without saving real effort.
-- **Auth**: single API key (`X-Api-Key` header) gating all write endpoints;
-  GET endpoints are public. Explicitly a stand-in for real JWT + RBAC
-  (documented future improvement).
 - **Caching**: `StackExchange.Redis`, cache-aside pattern.
 - **Logging**: Serilog, structured JSON to console.
 - **Testing**: xUnit + Testcontainers (real ephemeral Postgres) — required
@@ -393,13 +389,15 @@ changes never leak into the API contract.
   example error responses (`400`/`404`/`409`), plus a Postman environment
   file for variables.
 - **Environment variables**: `ConnectionStrings__Default`,
-  `Redis__ConnectionString`, `ApiKey`, `ASPNETCORE_ENVIRONMENT`.
+  `Redis__ConnectionString`, `ASPNETCORE_ENVIRONMENT`.
 - **Design doc**: this spec, covering approach, DB rationale, schema, API
   reference, and performance/concurrency notes.
-- **Limitations & future improvements** (documented, not built): real auth
-  (JWT + RBAC), read replicas / PgBouncer for DB scale-out, multi-category
-  support, Elasticsearch-grade search, CI/CD pipeline, rate limiting, an
-  outbox pattern if stock-change events ever need to be published to other
+- **Limitations & future improvements** (documented, not built): **no
+  authentication/authorization is implemented — all endpoints are public**;
+  production would require JWT + RBAC gating write endpoints. Also: read
+  replicas / PgBouncer for DB scale-out, multi-category support,
+  Elasticsearch-grade search, CI/CD pipeline, rate limiting, an outbox
+  pattern if stock-change events ever need to be published to other
   services.
 
 No `gh` CLI is authenticated in this environment, so the repository will be
