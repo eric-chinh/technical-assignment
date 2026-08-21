@@ -2,6 +2,7 @@ import { Upload, Button, message } from 'antd';
 import type { UploadProps } from 'antd';
 import { useUploadImageMutation, useDeleteImageMutation } from './api';
 import type { AppError } from '../../shared/lib/errors';
+import { resolveImageUrl } from '../../shared/lib/resolveImageUrl';
 
 interface Props {
   productId: number;
@@ -51,7 +52,7 @@ export function ImageUploader({ productId, imageUrl }: Props) {
     return (
       <div>
         <img
-          src={imageUrl}
+          src={resolveImageUrl(imageUrl) ?? undefined}
           alt="Product"
           style={{ width: 120, height: 120, objectFit: 'cover' }}
           onError={(e) => {

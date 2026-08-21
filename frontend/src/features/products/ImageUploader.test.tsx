@@ -39,10 +39,12 @@ describe('ImageUploader', () => {
     expect(await screen.findByText(/5 mb or smaller/i)).toBeInTheDocument();
   });
 
-  it('shows the existing image with a Remove button when one is already set', () => {
+  it('shows the existing image, resolved against the API origin, with a Remove button when one is set', () => {
     renderUploader('/uploads/products/1/photo.jpg');
 
-    expect(screen.getByAltText('Product')).toHaveAttribute('src', '/uploads/products/1/photo.jpg');
+    // The backend returns a path relative to the API's own origin, not the SPA's -
+    // resolveImageUrl must prefix it, or the browser resolves it against the wrong host.
+    expect(screen.getByAltText('Product')).toHaveAttribute('src', 'http://localhost:8080/uploads/products/1/photo.jpg');
     expect(screen.getByText('Remove')).toBeInTheDocument();
   });
 });

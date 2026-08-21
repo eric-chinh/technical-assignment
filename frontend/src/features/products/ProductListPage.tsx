@@ -5,6 +5,7 @@ import { useListProductsQuery } from './api';
 import { productsApi } from './api';
 import { useListCategoriesQuery } from '../categories/api';
 import { useDebouncedValue } from '../../shared/hooks/useDebouncedValue';
+import { resolveImageUrl } from '../../shared/lib/resolveImageUrl';
 import type { ProductListItem } from './types';
 
 export function ProductListPage() {
@@ -62,7 +63,7 @@ export function ProductListPage() {
       render: (url: string | null) =>
         url ? (
           <img
-            src={url}
+            src={resolveImageUrl(url) ?? undefined}
             alt=""
             loading="lazy"
             style={{ width: 40, height: 40, objectFit: 'cover' }}
