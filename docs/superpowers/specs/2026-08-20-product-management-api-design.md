@@ -240,6 +240,33 @@ would add overhead without adding any correctness it doesn't already have.
 — exercising the atomic stock update and concurrency behavior end-to-end
 against the same services used for manual local testing, no Testcontainers).
 
+**`ProductManagement.UnitTests` scope** — everything here runs with no
+database, no cache, no network, so the suite stays fast enough to run on
+every save:
+- **Domain**: entity invariant checks — e.g. a `ProductVariant` rejects
+  negative price/stock at construction, `Product.Archive()` throws if
+  already archived — exercising the `DomainException` hierarchy from §7
+  directly.
+- **Application — validators**: FluentValidation rules — e.g.
+  `CreateProductRequestValidator` rejects a missing name, negative price,
+  `compare_at_price < price`, oversized `attributes` JSON (the edge cases
+  already listed in §9).
+- **Application — use-case handlers**: e.g. `CreateProductHandler`,
+  `AdjustStockHandler` logic, with `IProductRepository` / `ICacheService` /
+  `IUnitOfWork` faked out via **NSubstitute** rather than a real
+  implementation — the handler's decision logic (how it turns a
+  repository result into a success/conflict outcome) is what's under test,
+  not the database itself.
+- **Application — mapping**: `ToDto()` / `ToEntity()` extension methods map
+  fields correctly, including null `attributes` / empty `variants[]` edge
+  cases.
+
+**Explicitly not unit tested** — these require the real docker-compose
+Postgres/Redis to mean anything, and live in `IntegrationTests` instead:
+the actual `ExecuteUpdateAsync` atomic behavior, EF Core query translation,
+real Redis cache behavior. This is exactly why §3.3's concurrency guarantee
+is proven at the integration layer, not mocked away.
+
 ### Dependency Injection & Composition Root
 
 Each project registers its own services rather than everything being wired
@@ -299,10 +326,14 @@ references a concrete EF Core or Redis type.
   add indirection without saving real effort.
 - **Caching**: `StackExchange.Redis`, cache-aside pattern.
 - **Logging**: Serilog, structured JSON to console.
-- **Testing**: xUnit, running against the real Postgres/Redis started by
-  `docker-compose.yml` (§10) rather than Testcontainers — one less moving
-  part, and integration tests exercise the exact same services manual
-  testing uses. `Respawn` resets table state between test runs (deletes
+- **Testing**: xUnit, plus **NSubstitute** for faking repository/cache
+  interfaces in unit tests (chosen over Moq, whose 2023 SponsorLink
+  telemetry incident pushed much of the .NET community toward
+  alternatives; see §5 for exact unit-test scope). Integration tests run
+  against the real Postgres/Redis started by `docker-compose.yml` (§10)
+  rather than Testcontainers — one less moving part, and integration tests
+  exercise the exact same services manual testing uses. `Respawn` resets
+  table state between test runs (deletes
   rows respecting FK order, re-seeds nothing) so tests stay isolated and
   repeatable against a persistent database instead of a fresh-per-run
   ephemeral one. This is required for the concurrency test specifically
