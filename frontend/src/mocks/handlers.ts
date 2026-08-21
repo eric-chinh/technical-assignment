@@ -88,7 +88,9 @@ export const handlers = [
     const product = mockProducts.find((p) => p.id === Number(params.id));
     if (!product) return new HttpResponse(null, { status: 404 });
     const ifMatch = request.headers.get('If-Match');
-    if (ifMatch && ifMatch !== '"1"') {
+    // Mirrors the real backend's ParseIfMatch: a missing/unparseable header defaults to a
+    // version that never matches a real xmin, so it's a guaranteed conflict, not a pass-through.
+    if (ifMatch !== '"1"') {
       return HttpResponse.json({ title: 'Concurrency conflict.', status: 409 }, { status: 409 });
     }
     const body = (await request.json()) as { name: string; description: string | null; categoryId: number; brand: string | null };
