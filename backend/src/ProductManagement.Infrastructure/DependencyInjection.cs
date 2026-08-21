@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<IStockRepository, StockRepository>();
         services.AddScoped<IFileStorageService>(_ =>
             new LocalFileStorageService(config["Uploads:RootPath"] ?? "wwwroot/uploads"));
+        services.AddScoped<Seeding.DbInitializer>();
 
         return services;
     }

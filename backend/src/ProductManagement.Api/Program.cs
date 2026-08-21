@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using ProductManagement.Api.Middleware;
 using ProductManagement.Application;
 using ProductManagement.Infrastructure;
@@ -34,6 +35,16 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
+
+if (!app.Environment.IsProduction())
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ProductManagement.Infrastructure.Persistence.ProductManagementDbContext>();
+    await db.Database.MigrateAsync();
+
+    var seeder = scope.ServiceProvider.GetRequiredService<ProductManagement.Infrastructure.Seeding.DbInitializer>();
+    await seeder.SeedAsync(default);
+}
 
 if (app.Environment.IsDevelopment())
 {
