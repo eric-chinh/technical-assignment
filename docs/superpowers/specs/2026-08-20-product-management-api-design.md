@@ -155,34 +155,68 @@ what Postgres full-text search can do.
 
 ### 3.4 Consistency Strategy
 
-Two mechanisms, chosen per write pattern:
+Two **distinct** concurrency-control categories, deliberately not the same
+mechanism reused twice — matched to each write path's contention profile
+rather than picking one and applying it everywhere:
 
-- **Stock changes** (the concurrency-critical path): a single atomic
-  expression-based update, issued via EF Core's `ExecuteUpdateAsync` (no
-  hand-written SQL, no load-then-save) —
-  ```csharp
-  var affected = await db.ProductVariants
-      .Where(v => v.Id == id && v.StockQuantity >= qty)
-      .ExecuteUpdateAsync(s => s.SetProperty(
-          v => v.StockQuantity, v => v.StockQuantity - qty));
-  ```
-  which compiles to `UPDATE product_variants SET stock_quantity =
-  stock_quantity - :qty WHERE id = :id AND stock_quantity >= :qty`. Zero
-  rows affected means insufficient stock → `409 Conflict`. Because the
-  arithmetic happens in the database against the row's current value —
-  never read into application memory first — there is no window for a
-  concurrent request to read a stale value and compute a conflicting
-  result (the classic lost-update problem a load-then-`SaveChanges()`
-  pattern is exposed to). Postgres's row-level lock during the statement
-  itself is sufficient; no explicit transaction, long-held lock, or
-  `SERIALIZABLE` isolation is needed — the statement is atomic on its own.
-- **General field edits** (name, price, category, etc.): optimistic
-  concurrency via Postgres's native `xmin` system column, exposed to EF Core
-  as a concurrency token. Conflicting concurrent edits return `409` with the
-  current server state so the client can retry.
+**Stock changes (the concurrency-critical path) — atomic conditional
+update, a single-statement compare-and-swap.** This is its own category,
+not a variant of optimistic concurrency below: there is no separate
+read-then-compare-then-write cycle at all, so there is nothing to retry.
+Issued via EF Core's `ExecuteUpdateAsync` (no hand-written SQL, no
+load-then-save):
+```csharp
+var affected = await db.ProductVariants
+    .Where(v => v.Id == id && v.StockQuantity >= qty)
+    .ExecuteUpdateAsync(s => s.SetProperty(
+        v => v.StockQuantity, v => v.StockQuantity - qty));
+```
+which compiles to `UPDATE product_variants SET stock_quantity =
+stock_quantity - :qty WHERE id = :id AND stock_quantity >= :qty`. Zero rows
+affected means insufficient stock → `409 Conflict`. Because the arithmetic
+happens in the database against the row's current value — never read into
+application memory first — there is no window for a concurrent request to
+read a stale value and compute a conflicting result (the classic
+lost-update problem a load-then-`SaveChanges()` pattern is exposed to).
+Postgres's row-level lock during the statement itself is sufficient; no
+explicit transaction, long-held lock, or `SERIALIZABLE` isolation is
+needed — the statement is atomic on its own. This is deliberately neither
+classic optimistic concurrency (no retry loop needed, so no wasted
+round-trips under heavy contention) nor pessimistic locking (no lock held
+across multiple statements) — it gets the low overhead of the former and
+the correctness guarantee of the latter, for exactly the shape of problem
+"decrement this counter, but never below zero."
+
+**General field edits (name, price, category, etc.) — optimistic
+concurrency**, via Postgres's native `xmin` system column exposed to EF
+Core as a concurrency token: read the row (capturing its current `xmin`),
+edit it, then write with `WHERE id = :id AND xmin = :expectedXmin`.
+Conflicting concurrent edits return `409` with the current server state so
+the client can reload and retry. This category assumes conflicts are rare
+and cheap to retry — true for admin catalog edits, false for stock
+decrements under load, which is exactly why stock doesn't use this
+mechanism.
+
+**Why not one mechanism for both**: the two write paths have opposite
+contention profiles. Stock decrements can be hit by many concurrent
+requests racing for the same row (a flash sale); general field edits are
+low-frequency, human-paced admin activity where an occasional retry is
+cheap. Using optimistic concurrency for stock would mean retry storms
+under exactly the load pattern that matters most; using the atomic
+conditional-update pattern for general edits would work but adds no value
+over the simpler read-modify-write-with-a-version-check flow, since
+there's no hot-path performance pressure to justify collapsing it into one
+statement.
+
+| | Atomic conditional update (stock) | Optimistic concurrency (`xmin`, general edits) |
+|---|---|---|
+| Read-then-write cycle? | No — one statement | Yes — read, mutate, write |
+| Behavior on conflict | `0` rows affected, no retry — caller gets a definitive `409` | Throws, caller must reload and retry |
+| Lock held across round-trips? | No | No (optimistic — no lock at all, just a version check at write time) |
+| Best suited to | High contention, single-field numeric change | Low contention, multi-field edits |
 
 Both write paths surface conflicts as `409` uniformly, so API consumers need
-only one conflict-handling code path regardless of which mechanism is
+only one conflict-handling code path regardless of which category is
 underneath.
 
 ## 4. Scalability
