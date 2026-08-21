@@ -131,6 +131,16 @@ as `If-Match` automatically on `PUT`/`PATCH` for that resource. Component
 code calls a normal "update product" mutation; the concurrency plumbing is
 invisible to it.
 
+**This depends on a backend CORS setting, not just frontend code**: since
+the frontend and API are always on different ports (cross-origin, backend
+§10's CORS subsection), the browser hides response headers from
+JavaScript by default unless the backend explicitly exposes them via
+`WithExposedHeaders("ETag", ...)`. If that's ever missing or misconfigured,
+`response.headers['etag']` comes back silently `undefined` — no console
+error, no failed request, `If-Match` just never gets sent and the
+concurrency UX in §8 quietly never triggers. Worth checking first if
+concurrent-edit conflicts ever stop showing up in testing.
+
 **Error handling — one normalized shape everywhere**: the Axios response
 interceptor parses the backend's `ProblemDetails` body into one `AppError`
 (`status`, `message`, `fieldErrors?`, `traceId?`) before RTK Query surfaces

@@ -686,7 +686,9 @@ exposing internals to the caller.
 - **Environment variables**: `ConnectionStrings__Default`,
   `Redis__ConnectionString`, `ASPNETCORE_ENVIRONMENT`, `Seeding__CategoryCount`,
   `Seeding__ProductCount`, `Seeding__MaxVariantsPerProduct` (see Seed Data,
-  below — all optional, default to the seeder's built-in values if unset).
+  below — all optional, default to the seeder's built-in values if unset),
+  `Cors__AllowedOrigins__0` (see CORS, below — optional, defaults to
+  `http://localhost:5173`).
 - **Design doc**: this spec, covering approach, DB rationale, schema, API
   reference, and performance/concurrency notes.
 - **Limitations & future improvements** (documented, not built): **no
@@ -742,6 +744,49 @@ from `backend/src/ProductManagement.Api`) for hot reload, pointing
 `localhost:5432`/`localhost:6379` (the same ports the compose services
 expose, so no separate "local" connection string is needed — same config
 either way).
+
+### CORS
+
+The API and the front-end are always on different ports (`:8080` vs.
+`:5173`, whatever the mode from above) — different port means different
+origin under the same-origin policy, so the API must explicitly allow
+cross-origin requests from the front-end or the browser blocks them.
+Registered in `Program.cs`, alongside the other composition-root/middleware
+wiring (§5):
+
+```csharp
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy => policy
+        .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+            ?? new[] { "http://localhost:5173" })
+        .AllowAnyMethod()
+        .AllowAnyHeader()
+        .WithExposedHeaders("ETag", "Location"));
+});
+// ...
+app.UseCors("Frontend");
+```
+
+No `AllowCredentials()` — there's no cookie-based auth to carry
+cross-origin, consistent with the no-auth decision already made, which
+keeps this simpler than a typical CORS setup.
+
+**`WithExposedHeaders` is not optional here, it's load-bearing**: by
+default, CORS only lets browser JavaScript read a small "safelisted" set
+of response headers — `ETag` is not on that list. Without exposing it
+explicitly, the browser would still receive the `ETag` header, but the
+front-end's Axios interceptor (frontend spec §5, which captures `ETag` for
+the `If-Match` optimistic-concurrency flow) would find it silently
+`undefined` on every request. `PUT`/`PATCH` calls would go out without
+`If-Match`, the concurrency check from §3.4 would never actually trigger
+from the UI, and nothing would surface an error anywhere — it would just
+quietly not work. `Location` needs the same treatment if the front-end
+ever reads it off a `201` response.
+
+`AllowedOrigins` defaults to `http://localhost:5173` — not a coincidence:
+that's the same port both the `web` docker service and Vite's dev server
+use, so one default value covers every local mode without switching.
 
 ### Seed Data
 
