@@ -15,6 +15,12 @@ public static class DependencyInjection
         services.AddScoped<Categories.GetCategoryHandler>();
         services.AddScoped<Categories.ListCategoriesHandler>();
 
+        services.AddScoped<Products.CreateProductHandler>();
+        services.AddScoped<Products.UpdateProductHandler>();
+        services.AddScoped<Products.DeleteProductHandler>();
+        services.AddScoped<Products.GetProductHandler>();
+        services.AddScoped<Products.ListProductsHandler>();
+
         return services;
     }
 }
