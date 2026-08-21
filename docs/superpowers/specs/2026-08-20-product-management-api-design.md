@@ -32,9 +32,9 @@ are documented as future improvements rather than built (see §11).
 4. Add caching once the read endpoints exist and are correct — caching is a
    performance layer on top of correct behavior, not a substitute for it.
 5. Write integration tests for the concurrency-critical path (parallel stock
-   decrements) using a real ephemeral Postgres (Testcontainers), not mocks —
-   consistency guarantees are meaningless if only tested against an in-memory
-   fake.
+   decrements) against the real Postgres started by docker-compose (§10),
+   not mocks — consistency guarantees are meaningless if only tested against
+   an in-memory fake.
 6. Produce the Postman collection and design/limitations documentation
    alongside the code, not after — endpoints and docs should never drift.
 
@@ -236,8 +236,9 @@ would add overhead without adding any correctness it doesn't already have.
 
 **Test project layout mirrors this split**: `ProductManagement.UnitTests`
 (Domain + Application, no I/O, fast) and `ProductManagement.IntegrationTests`
-(Testcontainers-backed, exercises the real Postgres atomic-UPDATE and
-concurrency behavior end-to-end).
+(targets the real Postgres/Redis started by `docker-compose.yml` — see §10
+— exercising the atomic stock update and concurrency behavior end-to-end
+against the same services used for manual local testing, no Testcontainers).
 
 ### Dependency Injection & Composition Root
 
@@ -298,10 +299,17 @@ references a concrete EF Core or Redis type.
   add indirection without saving real effort.
 - **Caching**: `StackExchange.Redis`, cache-aside pattern.
 - **Logging**: Serilog, structured JSON to console.
-- **Testing**: xUnit + Testcontainers (real ephemeral Postgres) — required
-  for the concurrency test (fire N parallel stock-decrement requests, assert
-  stock never goes negative and exactly the right number of requests
-  succeed).
+- **Testing**: xUnit, running against the real Postgres/Redis started by
+  `docker-compose.yml` (§10) rather than Testcontainers — one less moving
+  part, and integration tests exercise the exact same services manual
+  testing uses. `Respawn` resets table state between test runs (deletes
+  rows respecting FK order, re-seeds nothing) so tests stay isolated and
+  repeatable against a persistent database instead of a fresh-per-run
+  ephemeral one. This is required for the concurrency test specifically
+  (fire N parallel stock-decrement requests, assert stock never goes
+  negative and exactly the right number of requests succeed) — that
+  guarantee is only meaningful proven against a real Postgres instance, not
+  an in-memory fake.
 - **API docs**: Swashbuckle (OpenAPI/Swagger UI) generated from code, plus a
   separately maintained Postman collection for the submission.
 
@@ -483,9 +491,9 @@ exposing internals to the caller.
 
 ### Local Development & Testing Workflow
 
-`docker-compose.yml` brings up three services for **manual** local testing
-— this is distinct from the automated integration test suite, which keeps
-using Testcontainers (see below):
+`docker-compose.yml` brings up three services and is the **single**
+local-testing setup — both manual testing and the automated integration
+suite target it, no Testcontainers involved:
 - `postgres` (matching the production-targeted major version) — named
   volume so data survives restarts, healthcheck gating readiness
 - `redis` — healthcheck gating readiness
@@ -496,21 +504,31 @@ using Testcontainers (see below):
   environments only, so this auto-migrate behavior can never run against a
   real deployment by accident.
 
-**Workflow**: `docker compose up --build` brings up the full stack; Swagger
-UI is reachable at `http://localhost:<port>/swagger` for interactive
-exploration, and the delivered Postman collection's environment file points
-at the same base URL — so the same running stack serves both manual
-Swagger poking and the full Postman collection run. `docker compose down
--v` tears everything down including volumes, for a clean-slate restart.
+**Workflow**: `docker compose up --build` (or `-d` to run detached) brings
+up the full stack; Swagger UI is reachable at
+`http://localhost:<port>/swagger` for interactive exploration, and the
+delivered Postman collection's environment file points at the same base
+URL — so the same running stack serves manual Swagger poking, the Postman
+collection, and `dotnet test` for the integration project. `docker compose
+down -v` tears everything down including volumes, for a clean-slate
+restart.
 
-**Why the automated integration suite still uses Testcontainers rather than
-this compose stack**: Testcontainers spins up and tears down its own
-ephemeral Postgres per test run, so `dotnet test` works standalone (e.g. in
-a future CI pipeline) without requiring `docker compose up` first or
-worrying about state leaking between test runs on a long-lived database.
-The two serve different purposes — this compose stack is for a human
-exercising the API by hand; Testcontainers is for the test suite proving
-correctness (especially the concurrency test from §6) reproducibly.
+**Keeping automated tests isolated on a persistent (not ephemeral)
+database**: since `IntegrationTests` runs against the same long-lived
+`postgres` container repeatedly rather than a fresh one per run, two things
+keep it safe and repeatable:
+- It targets a **separate database** inside the same Postgres instance
+  (`productdb_test` vs. the app's `productdb`) via its own connection
+  string, so running tests never touches data you're manually poking at
+  through Swagger/Postman in the same compose session.
+- `Respawn` resets `productdb_test`'s table state between test runs
+  (deletes all rows respecting FK order) so each test run starts from a
+  known-clean schema without needing to tear down and recreate the
+  container.
+
+This trades Testcontainers' automatic ephemeral-container-per-run isolation
+for one less moving part locally — everything, manual and automated, runs
+against the one `docker compose up` stack.
 
 No `gh` CLI is authenticated in this environment, so the repository will be
 fully built and committed locally with git; the final `git push` to the
