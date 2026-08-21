@@ -18,7 +18,8 @@ public class DatabaseFixture : IAsyncLifetime
         _respawner = await Respawner.CreateAsync(_connection, new RespawnerOptions
         {
             DbAdapter = DbAdapter.Postgres,
-            SchemasToInclude = new[] { "public" }
+            SchemasToInclude = new[] { "public" },
+            TablesToIgnore = new Respawn.Graph.Table[] { "__EFMigrationsHistory" }
         });
     }
 

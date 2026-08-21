@@ -21,6 +21,11 @@ public static class DependencyInjection
         services.AddScoped<Products.GetProductHandler>();
         services.AddScoped<Products.ListProductsHandler>();
 
+        services.AddScoped<Variants.CreateVariantHandler>();
+        services.AddScoped<Variants.UpdateVariantHandler>();
+        services.AddScoped<Variants.DeleteVariantHandler>();
+        services.AddScoped<Variants.ListVariantsHandler>();
+
         return services;
     }
 }
