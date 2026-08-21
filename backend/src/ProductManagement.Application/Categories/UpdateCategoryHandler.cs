@@ -9,12 +9,15 @@ public class UpdateCategoryHandler
 {
     private readonly ICategoryRepository _categories;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICacheService _cache;
     private readonly IValidator<UpdateCategoryRequest> _validator;
 
-    public UpdateCategoryHandler(ICategoryRepository categories, IUnitOfWork unitOfWork, IValidator<UpdateCategoryRequest> validator)
+    public UpdateCategoryHandler(
+        ICategoryRepository categories, IUnitOfWork unitOfWork, ICacheService cache, IValidator<UpdateCategoryRequest> validator)
     {
         _categories = categories;
         _unitOfWork = unitOfWork;
+        _cache = cache;
         _validator = validator;
     }
 
@@ -27,6 +30,7 @@ public class UpdateCategoryHandler
 
         category.Update(request.Name, request.Slug, request.ParentCategoryId, request.DisplayOrder, request.IsActive);
         await _unitOfWork.SaveChangesAsync(ct);
+        await _cache.RemoveAsync(CategoryCacheKeys.ListKey, ct);
         return category.ToDto();
     }
 }

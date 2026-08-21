@@ -9,12 +9,15 @@ public class UpdateProductHandler
 {
     private readonly IProductRepository _products;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICacheService _cache;
     private readonly IValidator<UpdateProductRequest> _validator;
 
-    public UpdateProductHandler(IProductRepository products, IUnitOfWork unitOfWork, IValidator<UpdateProductRequest> validator)
+    public UpdateProductHandler(
+        IProductRepository products, IUnitOfWork unitOfWork, ICacheService cache, IValidator<UpdateProductRequest> validator)
     {
         _products = products;
         _unitOfWork = unitOfWork;
+        _cache = cache;
         _validator = validator;
     }
 
@@ -29,6 +32,8 @@ public class UpdateProductHandler
         product.UpdateDetails(request.Name, request.Description, request.CategoryId, request.Brand, request.Attributes);
 
         await _unitOfWork.SaveChangesAsync(ct); // throws DbUpdateConcurrencyException on xmin mismatch -> 409 (Task 11)
+        await _cache.RemoveAsync(ProductCacheKeys.Product(id), ct); // never serve stale data after a write (spec section 8)
+        await _cache.IncrementVersionAsync(ProductCacheKeys.ListVersionKey, ct);
         return product.ToDto();
     }
 }

@@ -8,8 +8,14 @@ public class DeleteProductHandler
 {
     private readonly IProductRepository _products;
     private readonly IUnitOfWork _unitOfWork;
-    public DeleteProductHandler(IProductRepository products, IUnitOfWork unitOfWork)
-    { _products = products; _unitOfWork = unitOfWork; }
+    private readonly ICacheService _cache;
+
+    public DeleteProductHandler(IProductRepository products, IUnitOfWork unitOfWork, ICacheService cache)
+    {
+        _products = products;
+        _unitOfWork = unitOfWork;
+        _cache = cache;
+    }
 
     public async Task HandleAsync(long id, CancellationToken ct)
     {
@@ -18,5 +24,7 @@ public class DeleteProductHandler
 
         product.Archive(); // soft delete (spec section 3.2) - throws if already archived
         await _unitOfWork.SaveChangesAsync(ct);
+        await _cache.RemoveAsync(ProductCacheKeys.Product(id), ct);
+        await _cache.IncrementVersionAsync(ProductCacheKeys.ListVersionKey, ct);
     }
 }

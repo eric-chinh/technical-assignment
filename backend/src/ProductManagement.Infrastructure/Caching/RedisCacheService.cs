@@ -22,5 +22,11 @@ public class RedisCacheService : ICacheService
 
     public Task RemoveAsync(string key, CancellationToken ct) => Db.KeyDeleteAsync(key);
 
+    public async Task<long> GetVersionAsync(string versionKey, CancellationToken ct)
+    {
+        var value = await Db.StringGetAsync(versionKey);
+        return value.IsNullOrEmpty ? 0 : (long)value;
+    }
+
     public Task<long> IncrementVersionAsync(string versionKey, CancellationToken ct) => Db.StringIncrementAsync(versionKey);
 }

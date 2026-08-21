@@ -8,11 +8,13 @@ public class DeleteCategoryHandler
 {
     private readonly ICategoryRepository _categories;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICacheService _cache;
 
-    public DeleteCategoryHandler(ICategoryRepository categories, IUnitOfWork unitOfWork)
+    public DeleteCategoryHandler(ICategoryRepository categories, IUnitOfWork unitOfWork, ICacheService cache)
     {
         _categories = categories;
         _unitOfWork = unitOfWork;
+        _cache = cache;
     }
 
     public async Task HandleAsync(long id, CancellationToken ct)
@@ -25,5 +27,6 @@ public class DeleteCategoryHandler
 
         _categories.Remove(category);
         await _unitOfWork.SaveChangesAsync(ct);
+        await _cache.RemoveAsync(CategoryCacheKeys.ListKey, ct);
     }
 }

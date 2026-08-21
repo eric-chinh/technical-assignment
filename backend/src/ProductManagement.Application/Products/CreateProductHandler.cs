@@ -10,15 +10,17 @@ public class CreateProductHandler
     private readonly IProductRepository _products;
     private readonly ICategoryRepository _categories;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICacheService _cache;
     private readonly IValidator<CreateProductRequest> _validator;
 
     public CreateProductHandler(
-        IProductRepository products, ICategoryRepository categories,
-        IUnitOfWork unitOfWork, IValidator<CreateProductRequest> validator)
+        IProductRepository products, ICategoryRepository categories, IUnitOfWork unitOfWork,
+        ICacheService cache, IValidator<CreateProductRequest> validator)
     {
         _products = products;
         _categories = categories;
         _unitOfWork = unitOfWork;
+        _cache = cache;
         _validator = validator;
     }
 
@@ -39,6 +41,7 @@ public class CreateProductHandler
 
         _products.Add(product);
         await _unitOfWork.SaveChangesAsync(ct); // one transaction: product + all initial variants together
+        await _cache.IncrementVersionAsync(ProductCacheKeys.ListVersionKey, ct); // new product must appear in list views
         return product.ToDto();
     }
 }

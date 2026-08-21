@@ -1,4 +1,5 @@
 using ProductManagement.Application.Common.Interfaces;
+using ProductManagement.Application.Products;
 
 namespace ProductManagement.Application.Variants;
 
@@ -17,21 +18,30 @@ public class AdjustStockHandler
         _cache = cache;
     }
 
-    public async Task<AdjustStockResult> HandleAsync(long variantId, AdjustStockRequest request, string? idempotencyKey, CancellationToken ct)
+    public async Task<AdjustStockResult> HandleAsync(
+        long productId, long variantId, AdjustStockRequest request, string? idempotencyKey, CancellationToken ct)
     {
+        AdjustStockResult result;
+
         if (string.IsNullOrWhiteSpace(idempotencyKey))
         {
             var direct = await _stock.TryAdjustAsync(variantId, request.Delta, ct);
-            return new AdjustStockResult(direct.Succeeded, direct.NewQuantity, direct.AvailableQuantity);
+            result = new AdjustStockResult(direct.Succeeded, direct.NewQuantity, direct.AvailableQuantity);
+        }
+        else
+        {
+            var cacheKey = $"stock-adjust:{idempotencyKey}";
+            var cached = await _cache.GetAsync<AdjustStockResult>(cacheKey, ct);
+            if (cached is not null) return cached; // retried request -> never re-applied, no cache side-effect either
+
+            var adjusted = await _stock.TryAdjustAsync(variantId, request.Delta, ct);
+            result = new AdjustStockResult(adjusted.Succeeded, adjusted.NewQuantity, adjusted.AvailableQuantity);
+            await _cache.SetAsync(cacheKey, result, IdempotencyTtl, ct);
         }
 
-        var cacheKey = $"stock-adjust:{idempotencyKey}";
-        var cached = await _cache.GetAsync<AdjustStockResult>(cacheKey, ct);
-        if (cached is not null) return cached; // retried request with the same key -> never re-applied
+        if (result.Succeeded)
+            await _cache.RemoveAsync(ProductCacheKeys.Product(productId), ct); // stock must never be served stale
 
-        var result = await _stock.TryAdjustAsync(variantId, request.Delta, ct);
-        var mapped = new AdjustStockResult(result.Succeeded, result.NewQuantity, result.AvailableQuantity);
-        await _cache.SetAsync(cacheKey, mapped, IdempotencyTtl, ct);
-        return mapped;
+        return result;
     }
 }

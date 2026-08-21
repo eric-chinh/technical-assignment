@@ -41,7 +41,7 @@ public class VariantsController : ControllerBase
         [FromBody] AdjustStockRequest request, CancellationToken ct)
     {
         var idempotencyKey = Request.Headers.TryGetValue("Idempotency-Key", out var values) ? values.ToString() : null;
-        var result = await handler.HandleAsync(variantId, request, idempotencyKey, ct);
+        var result = await handler.HandleAsync(productId, variantId, request, idempotencyKey, ct);
         return result.Succeeded ? Ok(result) : Conflict(result);
     }
 }
