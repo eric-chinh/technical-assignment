@@ -11,15 +11,17 @@ public class CreateVariantHandler
     private readonly IVariantRepository _variants;
     private readonly IProductRepository _products;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICacheService _cache;
     private readonly IValidator<CreateVariantRequest> _validator;
 
     public CreateVariantHandler(
         IVariantRepository variants, IProductRepository products,
-        IUnitOfWork unitOfWork, IValidator<CreateVariantRequest> validator)
+        IUnitOfWork unitOfWork, ICacheService cache, IValidator<CreateVariantRequest> validator)
     {
         _variants = variants;
         _products = products;
         _unitOfWork = unitOfWork;
+        _cache = cache;
         _validator = validator;
     }
 
@@ -36,6 +38,7 @@ public class CreateVariantHandler
 
         _variants.Add(variant);
         await _unitOfWork.SaveChangesAsync(ct); // duplicate SKU -> DuplicateSkuException via UnitOfWork translation (Task 5)
+        await _cache.RemoveAsync(ProductCacheKeys.Product(productId), ct); // the cached product's variants list must include the new one
         return variant.ToDto();
     }
 }

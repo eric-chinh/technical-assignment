@@ -55,6 +55,24 @@ public class VariantsEndpointsTests : IAsyncLifetime
         list.Should().ContainSingle(v => v.Id == variant.Id && !v.IsActive);
     }
 
+    [Fact]
+    public async Task CreateVariant_AfterProductWasAlreadyCached_GetProductReturnsIt_NotStale()
+    {
+        var productId = await CreateProductAsync("tee-v3");
+        // Populates the Redis product:{id} cache entry with an empty variants list, BEFORE
+        // the create - reproduces the exact sequence a user hits: view the product, then add a variant.
+        await _client.GetAsync($"/api/v1/products/{productId}");
+
+        await _client.PostAsJsonAsync($"/api/v1/products/{productId}/variants", new
+        { sku = "TEE-XL", size = "XL", color = "Green", price = 25.00m, stockQuantity = 8 });
+
+        var getResponse = await _client.GetAsync($"/api/v1/products/{productId}");
+        var product = await getResponse.Content.ReadFromJsonAsync<ProductRef>();
+
+        product!.Variants.Should().Contain(v => v.Sku == "TEE-XL");
+    }
+
     private sealed record IdRef(long Id);
     private sealed record VariantRef(long Id, string Sku, bool IsActive);
+    private sealed record ProductRef(long Id, List<VariantRef> Variants);
 }
