@@ -74,4 +74,25 @@ export const handlers = [
     if (!product) return new HttpResponse(null, { status: 404 });
     return HttpResponse.json(product, { headers: { ETag: '"1"' } });
   }),
+
+  http.post(`${baseUrl}/products`, async ({ request }) => {
+    const body = (await request.json()) as { name: string; slug: string; categoryId: number; brand: string | null; description: string | null };
+    const created: Product = {
+      id: mockProducts.length + 1, ...body, attributes: '{}', imageUrl: null, status: 'Draft', variants: [],
+    };
+    mockProducts.push(created);
+    return HttpResponse.json(created, { status: 201, headers: { Location: `/products/${created.id}` } });
+  }),
+
+  http.put(`${baseUrl}/products/:id`, async ({ params, request }) => {
+    const product = mockProducts.find((p) => p.id === Number(params.id));
+    if (!product) return new HttpResponse(null, { status: 404 });
+    const ifMatch = request.headers.get('If-Match');
+    if (ifMatch && ifMatch !== '"1"') {
+      return HttpResponse.json({ title: 'Concurrency conflict.', status: 409 }, { status: 409 });
+    }
+    const body = (await request.json()) as { name: string; description: string | null; categoryId: number; brand: string | null };
+    Object.assign(product, body);
+    return HttpResponse.json(product, { headers: { ETag: '"1"' } });
+  }),
 ];
