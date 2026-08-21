@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ProductManagement.Application.Common.Interfaces;
 using ProductManagement.Infrastructure.Persistence;
+using ProductManagement.Infrastructure.Persistence.Repositories;
 
 namespace ProductManagement.Infrastructure;
 
@@ -14,6 +15,7 @@ public static class DependencyInjection
             options.UseNpgsql(config.GetConnectionString("Default")));
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
 
         return services;
     }
