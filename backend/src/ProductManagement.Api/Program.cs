@@ -16,7 +16,13 @@ builder.Host.UseSerilog((context, loggerConfig) => loggerConfig
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    // Two distinct CreateVariantRequest types exist (Products, for the nested variant list on
+    // product creation, and Variants, for the standalone POST /variants endpoint) - Swashbuckle's
+    // default schemaId is just the short class name, so it collides. Use the full name instead.
+    options.CustomSchemaIds(type => type.FullName);
+});
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
