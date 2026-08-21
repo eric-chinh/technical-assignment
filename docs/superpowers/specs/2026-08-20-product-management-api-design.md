@@ -11,10 +11,12 @@ database design (SQL vs NoSQL rationale, extensibility), tech stack (ORM, valida
 API/data handling, and performance (caching, concurrency).
 
 **Scope**: core product catalog management — products, categories, variants
-(size/color/SKU/price/stock), with concurrency-safe stock updates. Explicitly
-**out of scope**: cart, checkout, orders, payments, and product images (removed from
-scope during design review — image handling adds no new insight into the
-consistency/scalability story this assessment is testing).
+(size/color/SKU/price/stock), with concurrency-safe stock updates, plus a
+deliberately minimal single-image-per-product upload (§3.2, §7) added
+later specifically to give a companion front-end spec's file-uploader
+component something real to integrate with. Explicitly **out of scope**:
+cart, checkout, orders, payments, multi-image galleries, and real blob
+storage for images (local disk only — see §11).
 
 **Depth target**: take-home realistic scope — fully working API, DB, and tests for
 the in-scope features; no authentication/authorization or CI/CD pipeline. Both
@@ -76,6 +78,7 @@ products(
   brand          varchar(100)  NULL,
   status         smallint      NOT NULL DEFAULT 0,  -- 0=Draft,1=Active,2=Archived
   attributes     jsonb         NOT NULL DEFAULT '{}',
+  image_url      varchar(500)  NULL,
   search_vector  tsvector      GENERATED ALWAYS AS (
                    setweight(to_tsvector('english', coalesce(name, '')), 'A') ||
                    setweight(to_tsvector('english', coalesce(brand, '')), 'B') ||
@@ -125,6 +128,18 @@ rigid fixed schema and full schemaless NoSQL.
 public hard-delete endpoint (hard delete/cascade is a DB-level behavior used
 only internally, not exposed as an API operation, to avoid destructive
 accidents on a live catalog).
+
+**Images — deliberately minimal**: `products.image_url` is a single
+nullable column, not a separate `product_images` table. Product images
+were originally cut from scope entirely (§1) because they added no insight
+into the consistency/scalability story this assessment tests — that
+reasoning still holds, so this stays as small as possible: **one** image
+per product, stored on local disk (not real blob storage), no per-variant
+images, no ordering/gallery. It exists specifically to give the front-end
+(separate spec) a real upload endpoint to integrate its file-uploader
+component against, rather than a mocked one. See §7 for the endpoint and
+§10 for storage/config details; real blob storage (S3/Azure Blob) remains
+a documented future improvement (§11), not this.
 
 ### 3.3 Search Strategy
 
@@ -270,15 +285,20 @@ Four projects, dependencies pointing inward only:
   `CreateProductHandler`, `AdjustStockHandler`), request/response DTOs,
   FluentValidation validators, and the interfaces the use cases depend on
   (`IProductRepository`, `IVariantRepository`, `IStockRepository`,
-  `ICategoryRepository`, `ICacheService`, `IUnitOfWork`). Depends only on
-  Domain. This is where business rules and orchestration live — no SQL, no
-  HTTP. `IVariantRepository` and `IStockRepository` are deliberately
-  separate: `IVariantRepository` is general variant CRUD (create, update
-  non-stock fields, soft-delete), while `IStockRepository` exposes only the
-  single atomic adjustment method from §3.4 — keeping `AdjustStockHandler`'s
-  dependency surface down to exactly the one method it needs, easier to
-  fake with NSubstitute and impossible to misuse for a non-atomic stock
-  write by accident.
+  `ICategoryRepository`, `ICacheService`, `IUnitOfWork`, `IFileStorageService`).
+  Depends only on Domain. This is where business rules and orchestration
+  live — no SQL, no HTTP, no filesystem. `IVariantRepository` and
+  `IStockRepository` are deliberately separate: `IVariantRepository` is
+  general variant CRUD (create, update non-stock fields, soft-delete),
+  while `IStockRepository` exposes only the single atomic adjustment
+  method from §3.4 — keeping `AdjustStockHandler`'s dependency surface down
+  to exactly the one method it needs, easier to fake with NSubstitute and
+  impossible to misuse for a non-atomic stock write by accident.
+  `IFileStorageService` (`SaveAsync(stream, fileName) -> url`,
+  `DeleteAsync(url)`) is the abstraction behind the image endpoint — the
+  product-image use case depends on this interface, never on "local disk"
+  directly, so swapping in real blob storage later (§11) means writing one
+  new Infrastructure implementation, zero Application changes.
 - **`ProductManagement.Infrastructure`** — EF Core `DbContext` + entity
   configurations + migrations, repository implementations, the
   `ExecuteUpdateAsync`-based atomic stock update, an `IUnitOfWork`
@@ -286,8 +306,9 @@ Four projects, dependencies pointing inward only:
   tracks multiple entities and commits them together via `SaveChangesAsync`,
   so `IUnitOfWork` here is a thin Application-facing interface over that
   existing behavior — not a second change-tracking layer), Redis-backed
-  `ICacheService` implementation. Depends on Application (implements its
-  interfaces) and Domain.
+  `ICacheService` implementation, and a local-disk `IFileStorageService`
+  implementation (writes under a mounted volume — §10). Depends on
+  Application (implements its interfaces) and Domain.
 - **`ProductManagement.Api`** — controllers, middleware (`ProblemDetails`
   error mapping), Swashbuckle setup, and the composition root
   (`Program.cs`) that wires Infrastructure implementations to Application
@@ -530,6 +551,16 @@ Base path `/api/v1`, JSON throughout, designed to RESTful conventions:
 - `PATCH /products/{id}` — partial update, same concurrency check
 - `DELETE /products/{id}` — soft delete (`status = Archived`), `204 No
   Content`
+- `POST /products/{id}/image` — `multipart/form-data`, single file field;
+  validated server-side (content type must be `image/jpeg`, `image/png`,
+  or `image/webp`; max 5 MB — checked in the Application handler before
+  touching disk, not via FluentValidation, which isn't a natural fit for
+  file streams). Saves to local disk (§10), sets `products.image_url`,
+  returns `200 OK` with `{ "imageUrl": "/uploads/products/{id}/{guid}.jpg" }`.
+  Replacing an existing image deletes the old file from disk before saving
+  the new one — no orphaned files accumulate.
+- `DELETE /products/{id}/image` — deletes the file from disk and clears
+  `image_url`, `204 No Content`. `404` if no image is currently set.
 
 ### Variants
 - `GET /products/{productId}/variants`
@@ -638,6 +669,11 @@ exposing internals to the caller.
 - Search query matching nothing at all (both full-text and trigram) →
   `200` with an empty result set, not `404` (an empty list is a valid,
   successful answer to "search for X")
+- Image upload with wrong content type (e.g. a PDF) or oversized (>5 MB) →
+  `400`, nothing written to disk
+- Image upload replacing an existing image → old file deleted from disk
+  before the new one is saved, no orphaned files
+- Image delete when no image is set → `404`
 
 ## 10. Deliverables
 
@@ -655,11 +691,17 @@ exposing internals to the caller.
   reference, and performance/concurrency notes.
 - **Limitations & future improvements** (documented, not built): **no
   authentication/authorization is implemented — all endpoints are public**;
-  production would require JWT + RBAC gating write endpoints. Also: read
-  replicas / PgBouncer for DB scale-out, multi-category support,
-  Elasticsearch-grade search, CI/CD pipeline, rate limiting, an outbox
-  pattern if stock-change events ever need to be published to other
-  services.
+  production would require JWT + RBAC gating write endpoints. Product
+  images are stored on local disk, not real blob storage — fine for one
+  container, not for a horizontally-scaled deployment (every replica would
+  need the same volume, or images uploaded to one replica would be
+  invisible to requests served by another); production would need
+  S3/Azure Blob behind the existing `IFileStorageService` abstraction (§5),
+  which is exactly what that interface is already shaped to make a
+  same-Application, Infrastructure-only change. Also: read replicas /
+  PgBouncer for DB scale-out, multi-category support, Elasticsearch-grade
+  search, CI/CD pipeline, rate limiting, an outbox pattern if stock-change
+  events ever need to be published to other services.
 
 ### Local Development & Testing Workflow
 
@@ -674,7 +716,12 @@ suite target it, no Testcontainers involved:
   can accept connections; applies EF Core migrations automatically at boot
   (`dbContext.Database.MigrateAsync()`), then seeds sample data (below),
   both gated to non-`Production` environments only, so neither behavior can
-  ever run against a real deployment by accident.
+  ever run against a real deployment by accident. A named volume
+  (`uploads_data`) is mounted at `/app/wwwroot/uploads`, and
+  `app.UseStaticFiles()` serves that directory directly — so an uploaded
+  product image (§7) survives container restarts and is reachable at
+  `http://localhost:<port>/uploads/products/{id}/{file}` for the front-end
+  to render in an `<img>` tag, no separate file-serving service needed.
 
 **Workflow**: `docker compose up --build` (or `-d` to run detached) brings
 up the full stack; Swagger UI is reachable at
@@ -753,5 +800,9 @@ user's own GitHub is a manual step outside this session.
 
 ## 11. Explicitly Out of Scope
 
-Cart, checkout, orders, payments, product images (removed from scope during
-design review), real authentication/authorization, CI/CD pipeline.
+Cart, checkout, orders, payments, real authentication/authorization,
+CI/CD pipeline. Product images are **partially** in scope (§3.2, §7) — a
+single image per product on local disk, added specifically for the
+front-end's file uploader — but multi-image galleries, per-variant
+images, image resizing/thumbnails, and real blob storage (S3/Azure Blob)
+remain out of scope, documented as future improvements.
