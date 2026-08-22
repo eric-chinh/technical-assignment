@@ -42,7 +42,7 @@ export function ProductForm({ product }: Props) {
           brand: values.brand ?? null,
           description: values.description ?? null,
           attributes: '{}',
-          variants: [],
+          items: [],
         }).unwrap();
         message.success('Product created.');
         navigate(`/products/${created.id}`);

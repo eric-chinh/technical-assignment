@@ -5,9 +5,12 @@ import type {
   PagedResult,
   CreateProductRequest,
   UpdateProductRequest,
-  Variant,
-  CreateVariantRequest,
+  ProductItem,
+  CreateProductItemRequest,
+  UpdateProductItemRequest,
   AdjustStockResult,
+  Variation,
+  Promotion,
 } from './types';
 
 export interface ListProductsParams {
@@ -42,28 +45,36 @@ export const productsApi = api.injectEndpoints({
       query: (id) => ({ url: `/products/${id}`, method: 'DELETE' }),
       invalidatesTags: ['ProductList'],
     }),
-    createVariant: builder.mutation<Variant, { productId: number; body: CreateVariantRequest }>({
-      query: ({ productId, body }) => ({ url: `/products/${productId}/variants`, method: 'POST', data: body }),
+    createProductItem: builder.mutation<ProductItem, { productId: number; body: CreateProductItemRequest }>({
+      query: ({ productId, body }) => ({ url: `/products/${productId}/items`, method: 'POST', data: body }),
       invalidatesTags: (_result, _error, { productId }) => [{ type: 'Product', id: productId }],
     }),
-    deleteVariant: builder.mutation<void, { productId: number; variantId: number }>({
-      query: ({ productId, variantId }) => ({ url: `/products/${productId}/variants/${variantId}`, method: 'DELETE' }),
-      invalidatesTags: (_result, _error, { productId }) => [{ type: 'Product', id: productId }],
-    }),
-    adjustStock: builder.mutation<AdjustStockResult, { productId: number; variantId: number; delta: number }>({
-      query: ({ productId, variantId, delta }) => ({
-        url: `/products/${productId}/variants/${variantId}/stock`,
+    updateProductItem: builder.mutation<ProductItem, { itemId: number; version: number; body: UpdateProductItemRequest }>({
+      query: ({ itemId, version, body }) => ({
+        url: `/product-items/${itemId}`,
         method: 'PATCH',
+        data: body,
+        headers: { 'If-Match': `"${version}"` },
+      }),
+    }),
+    deleteProductItem: builder.mutation<void, { productId: number; itemId: number }>({
+      query: ({ itemId }) => ({ url: `/product-items/${itemId}`, method: 'DELETE' }),
+      invalidatesTags: (_result, _error, { productId }) => [{ type: 'Product', id: productId }],
+    }),
+    adjustStock: builder.mutation<AdjustStockResult, { productId: number; itemId: number; delta: number }>({
+      query: ({ itemId, delta }) => ({
+        url: `/product-items/${itemId}/inventory/adjust`,
+        method: 'POST',
         data: { delta },
         headers: { 'Idempotency-Key': crypto.randomUUID() },
       }),
-      async onQueryStarted({ productId, variantId, delta }, { dispatch, queryFulfilled }) {
+      async onQueryStarted({ productId, itemId, delta }, { dispatch, queryFulfilled }) {
         // Instant UI feedback (spec section 5) - the cached stock number updates before
         // the network round-trip completes, then rolls back automatically on failure.
         const patch = dispatch(
           productsApi.util.updateQueryData('getProduct', productId, (draft) => {
-            const variant = draft.variants.find((v) => v.id === variantId);
-            if (variant) variant.stockQuantity += delta;
+            const item = draft.items.find((i) => i.id === itemId);
+            if (item) item.qtyInStock += delta;
           }),
         );
         try {
@@ -86,6 +97,12 @@ export const productsApi = api.injectEndpoints({
       query: (productId) => ({ url: `/products/${productId}/image`, method: 'DELETE' }),
       invalidatesTags: (_result, _error, productId) => [{ type: 'Product', id: productId }],
     }),
+    listVariations: builder.query<Variation[], number>({
+      query: (categoryId) => ({ url: `/categories/${categoryId}/variations`, method: 'GET' }),
+    }),
+    listPromotions: builder.query<Promotion[], void>({
+      query: () => ({ url: '/promotions', method: 'GET' }),
+    }),
   }),
 });
 
@@ -95,9 +112,12 @@ export const {
   useCreateProductMutation,
   useUpdateProductMutation,
   useDeleteProductMutation,
-  useCreateVariantMutation,
-  useDeleteVariantMutation,
+  useCreateProductItemMutation,
+  useUpdateProductItemMutation,
+  useDeleteProductItemMutation,
   useAdjustStockMutation,
   useUploadImageMutation,
   useDeleteImageMutation,
+  useListVariationsQuery,
+  useListPromotionsQuery,
 } = productsApi;

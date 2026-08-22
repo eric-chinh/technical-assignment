@@ -1,21 +1,21 @@
 import { memo } from 'react';
 import { Table, Button, Space, Popconfirm, message } from 'antd';
-import { useAdjustStockMutation, useDeleteVariantMutation } from './api';
-import type { Variant } from './types';
+import { useAdjustStockMutation, useDeleteProductItemMutation } from './api';
+import type { ProductItem } from './types';
 import type { AppError } from '../../shared/lib/errors';
 
 interface Props {
   productId: number;
-  variants: Variant[];
+  items: ProductItem[];
 }
 
-export const VariantsTable = memo(function VariantsTable({ productId, variants }: Props) {
+export const VariantsTable = memo(function VariantsTable({ productId, items }: Props) {
   const [adjustStock] = useAdjustStockMutation();
-  const [deleteVariant] = useDeleteVariantMutation();
+  const [deleteProductItem] = useDeleteProductItemMutation();
 
-  async function handleAdjust(variantId: number, delta: number) {
+  async function handleAdjust(itemId: number, delta: number) {
     try {
-      await adjustStock({ productId, variantId, delta }).unwrap();
+      await adjustStock({ productId, itemId, delta }).unwrap();
     } catch (err) {
       const appError = err as AppError;
       // The stock endpoint's 409 body is the raw AdjustStockResult shape, not
@@ -29,9 +29,9 @@ export const VariantsTable = memo(function VariantsTable({ productId, variants }
     }
   }
 
-  async function handleDelete(variantId: number) {
+  async function handleDelete(itemId: number) {
     try {
-      await deleteVariant({ productId, variantId }).unwrap();
+      await deleteProductItem({ productId, itemId }).unwrap();
       message.success('Variant deleted.');
     } catch (err) {
       message.error((err as AppError).message);
@@ -40,14 +40,13 @@ export const VariantsTable = memo(function VariantsTable({ productId, variants }
 
   const columns = [
     { title: 'SKU', dataIndex: 'sku', key: 'sku' },
-    { title: 'Size/Color', key: 'variant', render: (_: unknown, v: Variant) => [v.size, v.color].filter(Boolean).join(' / ') || '—' },
     { title: 'Price', dataIndex: 'price', key: 'price', render: (p: number) => `$${p}` },
     {
       title: 'Stock',
       key: 'stock',
-      render: (_: unknown, v: Variant) => (
+      render: (_: unknown, v: ProductItem) => (
         <Space>
-          <span>{v.stockQuantity}</span>
+          <span>{v.qtyInStock}</span>
           <Button size="small" onClick={() => handleAdjust(v.id, -1)}>
             −
           </Button>
@@ -60,7 +59,7 @@ export const VariantsTable = memo(function VariantsTable({ productId, variants }
     {
       title: '',
       key: 'actions',
-      render: (_: unknown, v: Variant) => (
+      render: (_: unknown, v: ProductItem) => (
         <Popconfirm title="Delete this variant?" onConfirm={() => handleDelete(v.id)}>
           <Button type="link" danger>
             Delete
@@ -70,10 +69,10 @@ export const VariantsTable = memo(function VariantsTable({ productId, variants }
     },
   ];
 
-  // The backend soft-deletes a variant (isActive = false) rather than removing the
-  // row - GetProduct still returns it, so a deleted variant must be filtered out here
+  // The backend soft-deletes an item (isActive = false) rather than removing the
+  // row - GetProduct still returns it, so a deleted item must be filtered out here
   // or the "Delete" action would appear to do nothing.
-  const activeVariants = variants.filter((v) => v.isActive);
+  const activeItems = items.filter((v) => v.isActive);
 
-  return <Table rowKey="id" columns={columns} dataSource={activeVariants} pagination={false} size="small" />;
+  return <Table rowKey="id" columns={columns} dataSource={activeItems} pagination={false} size="small" />;
 });

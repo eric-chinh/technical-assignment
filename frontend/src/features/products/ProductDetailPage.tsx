@@ -26,7 +26,7 @@ export function ProductDetailPage() {
       {!isCreate && productId && (
         <div>
           <Typography.Title level={5}>Variants</Typography.Title>
-          <VariantsTable productId={productId} variants={product?.variants ?? []} />
+          <VariantsTable productId={productId} items={product?.items ?? []} />
         </div>
       )}
     </div>

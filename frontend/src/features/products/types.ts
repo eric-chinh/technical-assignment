@@ -1,13 +1,12 @@
-export interface Variant {
+export interface ProductItem {
   id: number;
   sku: string;
-  size: string | null;
-  color: string | null;
   price: number;
-  compareAtPrice: number | null;
-  stockQuantity: number;
-  barcode: string | null;
+  qtyInStock: number;
+  productImage: string | null;
   isActive: boolean;
+  version: number;
+  variationOptionIds: number[];
 }
 
 export interface Product {
@@ -20,7 +19,7 @@ export interface Product {
   status: string;
   attributes: string;
   imageUrl: string | null;
-  variants: Variant[];
+  items: ProductItem[];
 }
 
 export interface ProductListItem {
@@ -43,14 +42,12 @@ export interface PagedResult<T> {
   totalCount: number;
 }
 
-export interface CreateVariantRequest {
+export interface CreateProductItemRequest {
   sku: string;
-  size: string | null;
-  color: string | null;
   price: number;
-  stockQuantity: number;
-  compareAtPrice: number | null;
-  barcode: string | null;
+  qtyInStock: number;
+  productImage: string | null;
+  variationOptionIds: number[];
 }
 
 export interface CreateProductRequest {
@@ -60,7 +57,7 @@ export interface CreateProductRequest {
   brand: string | null;
   description: string | null;
   attributes: string;
-  variants: CreateVariantRequest[];
+  items: CreateProductItemRequest[];
 }
 
 export interface UpdateProductRequest {
@@ -71,8 +68,41 @@ export interface UpdateProductRequest {
   attributes: string;
 }
 
+export interface UpdateProductItemRequest {
+  price: number;
+  productImage: string | null;
+}
+
 export interface AdjustStockResult {
   succeeded: boolean;
   newQuantity: number | null;
   availableQuantity: number | null;
+}
+
+export interface VariationOption {
+  id: number;
+  variationId: number;
+  value: string;
+}
+
+export interface Variation {
+  id: number;
+  categoryId: number;
+  name: string;
+  options: VariationOption[];
+}
+
+export interface PromotionCategory {
+  promotionId: number;
+  categoryId: number;
+}
+
+export interface Promotion {
+  id: number;
+  name: string;
+  description: string | null;
+  discountRate: number;
+  startDate: string;
+  endDate: string;
+  categories: PromotionCategory[];
 }

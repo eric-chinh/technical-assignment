@@ -9,7 +9,7 @@ function initialMockProducts(): Product[] {
     {
       id: 1, name: 'Classic Cotton Tee', slug: 'classic-cotton-tee', description: null,
       categoryId: 2, brand: 'Acme', status: 'Active', attributes: '{}', imageUrl: null,
-      variants: [{ id: 1, sku: 'TEE-M', size: 'M', color: 'Blue', price: 20, compareAtPrice: null, stockQuantity: 50, barcode: null, isActive: true }],
+      items: [{ id: 1, sku: 'TEE-M', price: 20, qtyInStock: 50, productImage: null, isActive: true, version: 1, variationOptionIds: [] }],
     },
   ];
 }
@@ -63,8 +63,8 @@ export const handlers = [
     const filtered = q ? mockProducts.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())) : mockProducts;
     const items: ProductListItem[] = filtered.map((p) => ({
       id: p.id, name: p.name, slug: p.slug, categoryId: p.categoryId, brand: p.brand, status: p.status,
-      minPrice: p.variants[0]?.price ?? null, maxPrice: p.variants[0]?.price ?? null,
-      totalStock: p.variants.reduce((sum, v) => sum + v.stockQuantity, 0), imageUrl: p.imageUrl,
+      minPrice: p.items[0]?.price ?? null, maxPrice: p.items[0]?.price ?? null,
+      totalStock: p.items.reduce((sum, v) => sum + v.qtyInStock, 0), imageUrl: p.imageUrl,
     }));
     return HttpResponse.json({ items, nextCursor: null, hasMore: false, totalCount: filtered.length });
   }),
@@ -78,7 +78,7 @@ export const handlers = [
   http.post(`${baseUrl}/products`, async ({ request }) => {
     const body = (await request.json()) as { name: string; slug: string; categoryId: number; brand: string | null; description: string | null };
     const created: Product = {
-      id: mockProducts.length + 1, ...body, attributes: '{}', imageUrl: null, status: 'Draft', variants: [],
+      id: mockProducts.length + 1, ...body, attributes: '{}', imageUrl: null, status: 'Draft', items: [],
     };
     mockProducts.push(created);
     return HttpResponse.json(created, { status: 201, headers: { Location: `/products/${created.id}` } });
@@ -98,40 +98,45 @@ export const handlers = [
     return HttpResponse.json(product, { headers: { ETag: '"1"' } });
   }),
 
-  http.post(`${baseUrl}/products/:productId/variants`, async ({ params, request }) => {
+  http.post(`${baseUrl}/products/:productId/items`, async ({ params, request }) => {
     const product = mockProducts.find((p) => p.id === Number(params.productId));
     if (!product) return new HttpResponse(null, { status: 404 });
-    const body = (await request.json()) as { sku: string; size: string | null; color: string | null; price: number; stockQuantity: number };
-    if (product.variants.some((v) => v.sku === body.sku)) {
+    const body = (await request.json()) as { sku: string; price: number; qtyInStock: number; productImage: string | null };
+    if (product.items.some((v) => v.sku === body.sku)) {
       return HttpResponse.json({ title: 'SKU already exists.', status: 409 }, { status: 409 });
     }
-    const created = { id: product.variants.length + 100, compareAtPrice: null, barcode: null, isActive: true, ...body };
-    product.variants.push(created);
+    const created = { id: product.items.length + 100, isActive: true, version: 1, variationOptionIds: [], ...body };
+    product.items.push(created);
     return HttpResponse.json(created, { status: 201 });
   }),
 
-  http.delete(`${baseUrl}/products/:productId/variants/:variantId`, ({ params }) => {
-    const product = mockProducts.find((p) => p.id === Number(params.productId));
-    const variant = product?.variants.find((v) => v.id === Number(params.variantId));
-    if (!variant) return new HttpResponse(null, { status: 404 });
-    variant.isActive = false; // soft delete, mirrors the real backend's Variant.Deactivate()
-    return new HttpResponse(null, { status: 204 });
+  http.delete(`${baseUrl}/product-items/:itemId`, ({ params }) => {
+    for (const product of mockProducts) {
+      const item = product.items.find((v) => v.id === Number(params.itemId));
+      if (item) {
+        item.isActive = false; // soft delete, mirrors the real backend's ProductItem.Deactivate()
+        return new HttpResponse(null, { status: 204 });
+      }
+    }
+    return new HttpResponse(null, { status: 404 });
   }),
 
-  http.patch(`${baseUrl}/products/:productId/variants/:variantId/stock`, async ({ params, request }) => {
-    const product = mockProducts.find((p) => p.id === Number(params.productId));
-    const variant = product?.variants.find((v) => v.id === Number(params.variantId));
-    if (!variant) return new HttpResponse(null, { status: 404 });
-    const { delta } = (await request.json()) as { delta: number };
-
-    if (delta < 0 && variant.stockQuantity + delta < 0) {
-      return HttpResponse.json(
-        { succeeded: false, newQuantity: null, availableQuantity: variant.stockQuantity },
-        { status: 409 },
-      );
+  http.post(`${baseUrl}/product-items/:itemId/inventory/adjust`, async ({ params, request }) => {
+    for (const product of mockProducts) {
+      const item = product.items.find((v) => v.id === Number(params.itemId));
+      if (item) {
+        const { delta } = (await request.json()) as { delta: number };
+        if (delta < 0 && item.qtyInStock + delta < 0) {
+          return HttpResponse.json(
+            { succeeded: false, newQuantity: null, availableQuantity: item.qtyInStock },
+            { status: 409 },
+          );
+        }
+        item.qtyInStock += delta;
+        return HttpResponse.json({ succeeded: true, newQuantity: item.qtyInStock, availableQuantity: null });
+      }
     }
-    variant.stockQuantity += delta;
-    return HttpResponse.json({ succeeded: true, newQuantity: variant.stockQuantity, availableQuantity: null });
+    return new HttpResponse(null, { status: 404 });
   }),
 
   http.post(`${baseUrl}/products/:productId/image`, async ({ params }) => {
