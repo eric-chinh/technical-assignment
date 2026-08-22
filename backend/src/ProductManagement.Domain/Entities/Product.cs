@@ -43,7 +43,11 @@ public class Product
         };
     }
 
-    public void AddItem(ProductItem item) => _items.Add(item);
+    public void AddItem(ProductItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        _items.Add(item);
+    }
 
     public void Activate()
     {
