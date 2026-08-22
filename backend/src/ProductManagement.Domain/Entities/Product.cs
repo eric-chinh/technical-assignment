@@ -17,10 +17,10 @@ public class Product
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
-    private readonly List<ProductVariant> _variants = new();
-    public IReadOnlyCollection<ProductVariant> Variants => _variants.AsReadOnly();
+    private readonly List<ProductItem> _items = new();
+    public IReadOnlyCollection<ProductItem> Items => _items.AsReadOnly();
 
-    private Product() { } // EF Core
+    private Product() { }
 
     public static Product Create(string name, string slug, long categoryId, string? brand, string attributes = "{}")
     {
@@ -43,7 +43,7 @@ public class Product
         };
     }
 
-    public void AddVariant(ProductVariant variant) => _variants.Add(variant);
+    public void AddItem(ProductItem item) => _items.Add(item);
 
     public void Activate()
     {
