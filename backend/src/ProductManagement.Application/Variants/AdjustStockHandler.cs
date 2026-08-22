@@ -19,7 +19,7 @@ public class AdjustStockHandler
     }
 
     public async Task<AdjustStockResult> HandleAsync(
-        long productId, long variantId, AdjustStockRequest request, string? idempotencyKey, CancellationToken ct)
+        long? productId, long variantId, AdjustStockRequest request, string? idempotencyKey, CancellationToken ct)
     {
         AdjustStockResult result;
 
@@ -39,8 +39,8 @@ public class AdjustStockHandler
             await _cache.SetAsync(cacheKey, result, IdempotencyTtl, ct);
         }
 
-        if (result.Succeeded)
-            await _cache.RemoveAsync(ProductCacheKeys.Product(productId), ct); // stock must never be served stale
+        if (result.Succeeded && productId.HasValue)
+            await _cache.RemoveAsync(ProductCacheKeys.Product(productId.Value), ct); // stock must never be served stale
 
         return result;
     }

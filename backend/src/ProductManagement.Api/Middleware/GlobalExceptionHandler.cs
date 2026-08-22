@@ -57,6 +57,7 @@ public class GlobalExceptionHandler : IExceptionHandler
         DuplicateSkuException ex => (HttpStatusCode.Conflict, ex.Message, null),
         DuplicateSlugException ex => (HttpStatusCode.Conflict, ex.Message, null),
         CategoryHasActiveProductsException ex => (HttpStatusCode.Conflict, ex.Message, null),
+        ConcurrencyConflictException ex => (HttpStatusCode.Conflict, ex.Message, null),
         DbUpdateConcurrencyException => (
             HttpStatusCode.Conflict, "The resource was modified by another request. Reload and try again.", null),
 

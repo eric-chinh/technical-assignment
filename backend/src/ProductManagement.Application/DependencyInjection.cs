@@ -29,6 +29,14 @@ public static class DependencyInjection
         services.AddScoped<Variants.ListVariantsHandler>();
         services.AddScoped<Variants.AdjustStockHandler>();
 
+        services.AddScoped<Variations.ListVariationsHandler>();
+        services.AddScoped<Variations.CreateVariationHandler>();
+        services.AddScoped<Variations.CreateVariationOptionHandler>();
+
+        services.AddScoped<Promotions.ListPromotionsHandler>();
+        services.AddScoped<Promotions.CreatePromotionHandler>();
+        services.AddScoped<Promotions.AttachPromotionCategoryHandler>();
+
         return services;
     }
 }

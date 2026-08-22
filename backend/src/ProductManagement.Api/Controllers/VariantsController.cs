@@ -4,7 +4,7 @@ using ProductManagement.Application.Variants;
 namespace ProductManagement.Api.Controllers;
 
 [ApiController]
-[Route("api/v1/products/{productId:long}/variants")]
+[Route("api/v1/products/{productId:long}/items")]
 public class VariantsController : ControllerBase
 {
     [HttpGet]
@@ -20,28 +20,40 @@ public class VariantsController : ControllerBase
         var result = await handler.HandleAsync(productId, request, ct);
         return CreatedAtAction(nameof(List), new { productId }, result);
     }
+}
 
-    [HttpPut("{variantId:long}")]
+[ApiController]
+[Route("api/v1/product-items")]
+public class ProductItemsController : ControllerBase
+{
+    [HttpPatch("{itemId:long}")]
     public async Task<IActionResult> Update(
-        [FromServices] UpdateVariantHandler handler, long productId, long variantId,
+        [FromServices] UpdateVariantHandler handler, long itemId,
         [FromBody] UpdateVariantRequest request, CancellationToken ct)
-        => Ok(await handler.HandleAsync(variantId, request, ct));
-
-    [HttpDelete("{variantId:long}")]
-    public async Task<IActionResult> Delete(
-        [FromServices] DeleteVariantHandler handler, long productId, long variantId, CancellationToken ct)
     {
-        await handler.HandleAsync(variantId, ct);
+        if (!Request.Headers.TryGetValue("If-Match", out var etag) ||
+            !int.TryParse(etag.ToString().Trim('"'), out var version))
+            return StatusCode(428, new { title = "If-Match header with current version is required." });
+
+        var requestWithVersion = request with { ExpectedVersion = version };
+        return Ok(await handler.HandleAsync(itemId, requestWithVersion, ct));
+    }
+
+    [HttpDelete("{itemId:long}")]
+    public async Task<IActionResult> Delete(
+        [FromServices] DeleteVariantHandler handler, long itemId, CancellationToken ct)
+    {
+        await handler.HandleAsync(itemId, ct);
         return NoContent();
     }
 
-    [HttpPatch("{variantId:long}/stock")]
+    [HttpPost("{itemId:long}/inventory/adjust")]
     public async Task<IActionResult> AdjustStock(
-        [FromServices] AdjustStockHandler handler, long productId, long variantId,
+        [FromServices] AdjustStockHandler handler, long itemId,
         [FromBody] AdjustStockRequest request, CancellationToken ct)
     {
         var idempotencyKey = Request.Headers.TryGetValue("Idempotency-Key", out var values) ? values.ToString() : null;
-        var result = await handler.HandleAsync(productId, variantId, request, idempotencyKey, ct);
+        var result = await handler.HandleAsync(null, itemId, request, idempotencyKey, ct);
         return result.Succeeded ? Ok(result) : Conflict(result);
     }
 }
