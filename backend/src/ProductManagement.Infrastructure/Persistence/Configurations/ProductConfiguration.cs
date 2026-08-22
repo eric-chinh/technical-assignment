@@ -56,11 +56,11 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.HasIndex("SearchVector").HasMethod("gin");
         builder.HasIndex(p => p.Name).HasMethod("gin").HasOperators("gin_trgm_ops");
 
-        builder.HasMany(p => p.Variants)
+        builder.HasMany(p => p.Items)
             .WithOne()
-            .HasForeignKey(v => v.ProductId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .HasForeignKey(i => i.ProductId)
+            .OnDelete(DeleteBehavior.Restrict);
 
-        builder.Navigation(p => p.Variants).UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Navigation(p => p.Items).UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

@@ -8,38 +8,37 @@ public class StockRepository : IStockRepository
     private readonly ProductManagementDbContext _db;
     public StockRepository(ProductManagementDbContext db) => _db = db;
 
-    public async Task<StockAdjustResult> TryAdjustAsync(long variantId, int delta, CancellationToken ct)
+    public async Task<StockAdjustResult> TryAdjustAsync(long itemId, int delta, CancellationToken ct)
     {
         if (delta >= 0)
         {
-            var incrementedRows = await _db.ProductVariants
-                .Where(v => v.Id == variantId)
-                .ExecuteUpdateAsync(s => s.SetProperty(v => v.StockQuantity, v => v.StockQuantity + delta), ct);
+            var incrementedRows = await _db.ProductItems
+                .Where(i => i.Id == itemId)
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.QtyInStock, i => i.QtyInStock + delta), ct);
 
             if (incrementedRows == 0) return new StockAdjustResult(false, null, null);
 
-            var afterIncrement = await _db.ProductVariants
-                .Where(v => v.Id == variantId).Select(v => v.StockQuantity).FirstAsync(ct);
+            var afterIncrement = await _db.ProductItems
+                .Where(i => i.Id == itemId).Select(i => i.QtyInStock).FirstAsync(ct);
             return new StockAdjustResult(true, afterIncrement, null);
         }
 
         var decrementAmount = -delta;
 
-        // The single atomic statement: the WHERE clause is the guard against overselling.
-        // No prior read, no window for a concurrent request to interleave (spec section 3.4).
-        var affectedRows = await _db.ProductVariants
-            .Where(v => v.Id == variantId && v.StockQuantity >= decrementAmount)
-            .ExecuteUpdateAsync(s => s.SetProperty(v => v.StockQuantity, v => v.StockQuantity - decrementAmount), ct);
+        // Single atomic statement — WHERE clause guards against overselling (spec §7 Strong Consistency).
+        var affectedRows = await _db.ProductItems
+            .Where(i => i.Id == itemId && i.QtyInStock >= decrementAmount)
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.QtyInStock, i => i.QtyInStock - decrementAmount), ct);
 
         if (affectedRows == 1)
         {
-            var afterDecrement = await _db.ProductVariants
-                .Where(v => v.Id == variantId).Select(v => v.StockQuantity).FirstAsync(ct);
+            var afterDecrement = await _db.ProductItems
+                .Where(i => i.Id == itemId).Select(i => i.QtyInStock).FirstAsync(ct);
             return new StockAdjustResult(true, afterDecrement, null);
         }
 
-        var currentStock = await _db.ProductVariants
-            .Where(v => v.Id == variantId).Select(v => (int?)v.StockQuantity).FirstOrDefaultAsync(ct);
+        var currentStock = await _db.ProductItems
+            .Where(i => i.Id == itemId).Select(i => (int?)i.QtyInStock).FirstOrDefaultAsync(ct);
         return new StockAdjustResult(false, null, currentStock);
     }
 }

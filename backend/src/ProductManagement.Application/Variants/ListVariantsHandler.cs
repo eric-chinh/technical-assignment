@@ -5,12 +5,12 @@ namespace ProductManagement.Application.Variants;
 
 public class ListVariantsHandler
 {
-    private readonly IVariantRepository _variants;
-    public ListVariantsHandler(IVariantRepository variants) => _variants = variants;
+    private readonly IProductItemRepository _items;
+    public ListVariantsHandler(IProductItemRepository items) => _items = items;
 
-    public async Task<List<VariantDto>> HandleAsync(long productId, CancellationToken ct)
+    public async Task<List<ProductItemDto>> HandleAsync(long productId, CancellationToken ct)
     {
-        var variants = await _variants.ListByProductIdAsync(productId, ct);
-        return variants.Select(v => v.ToDto()).ToList();
+        var items = await _items.ListByProductIdAsync(productId, ct);
+        return items.Select(i => i.ToDto()).ToList();
     }
 }

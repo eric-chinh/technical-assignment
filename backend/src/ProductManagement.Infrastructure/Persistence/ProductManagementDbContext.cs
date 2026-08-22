@@ -9,7 +9,12 @@ public class ProductManagementDbContext : DbContext
 
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Product> Products => Set<Product>();
-    public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
+    public DbSet<ProductItem> ProductItems => Set<ProductItem>();
+    public DbSet<Variation> Variations => Set<Variation>();
+    public DbSet<VariationOption> VariationOptions => Set<VariationOption>();
+    public DbSet<ProductConfiguration> ProductConfigurations => Set<ProductConfiguration>();
+    public DbSet<Promotion> Promotions => Set<Promotion>();
+    public DbSet<PromotionCategory> PromotionCategories => Set<PromotionCategory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

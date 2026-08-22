@@ -19,7 +19,7 @@ public class DeleteProductHandler
 
     public async Task HandleAsync(long id, CancellationToken ct)
     {
-        var product = await _products.GetByIdWithVariantsAsync(id, ct)
+        var product = await _products.GetByIdWithItemsAsync(id, ct)
             ?? throw new EntityNotFoundException(nameof(Product), id);
 
         product.Archive(); // soft delete (spec section 3.2) - throws if already archived

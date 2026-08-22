@@ -34,7 +34,7 @@ public class UploadProductImageHandler
         if (length > MaxSizeBytes)
             throw new InvalidImageException("Image exceeds the 5 MB size limit.");
 
-        var product = await _products.GetByIdWithVariantsAsync(productId, ct)
+        var product = await _products.GetByIdWithItemsAsync(productId, ct)
             ?? throw new EntityNotFoundException(nameof(Product), productId);
 
         if (!string.IsNullOrEmpty(product.ImageUrl))

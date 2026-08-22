@@ -24,7 +24,7 @@ public class GetProductHandler
         var cached = await _cache.GetAsync<ProductResult>(cacheKey, ct);
         if (cached is not null) return cached;
 
-        var product = await _products.GetByIdWithVariantsAsync(id, ct)
+        var product = await _products.GetByIdWithItemsAsync(id, ct)
             ?? throw new EntityNotFoundException(nameof(Product), id);
         var xmin = await _products.GetXminAsync(id, ct);
         var result = new ProductResult(product.ToDto(), xmin);
@@ -35,7 +35,7 @@ public class GetProductHandler
 
     public async Task<ProductResult> BySlugAsync(string slug, CancellationToken ct)
     {
-        var product = await _products.GetBySlugWithVariantsAsync(slug, ct)
+        var product = await _products.GetBySlugWithItemsAsync(slug, ct)
             ?? throw new EntityNotFoundException(nameof(Product), slug);
         return await ByIdAsync(product.Id, ct); // reuses the id-keyed cache entry
     }

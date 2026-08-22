@@ -66,16 +66,14 @@ public class DbInitializer
                 $"{{\"material\":\"{faker.Commerce.ProductMaterial()}\"}}");
             product.Activate();
 
-            var variantCount = random.Next(2, maxVariantsPerProduct + 1);
-            for (var v = 0; v < variantCount; v++)
+            var itemCount = random.Next(2, maxVariantsPerProduct + 1);
+            for (var v = 0; v < itemCount; v++)
             {
-                product.AddVariant(ProductVariant.Create(
+                product.AddItem(ProductItem.Create(
                     product.Id,
                     sku: $"SKU-{i}-{v}-{Guid.NewGuid():N}"[..24],
-                    size: faker.PickRandom("XS", "S", "M", "L", "XL"),
-                    color: faker.Commerce.Color(),
                     price: faker.Random.Decimal(10, 200),
-                    stockQuantity: faker.Random.Int(0, 200)));
+                    qtyInStock: faker.Random.Int(0, 200)));
             }
 
             batch.Add(product);

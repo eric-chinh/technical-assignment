@@ -7,19 +7,24 @@ namespace ProductManagement.Application.Variants;
 
 public class DeleteVariantHandler
 {
-    private readonly IVariantRepository _variants;
+    private readonly IProductItemRepository _items;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICacheService _cache;
-    public DeleteVariantHandler(IVariantRepository variants, IUnitOfWork unitOfWork, ICacheService cache)
-    { _variants = variants; _unitOfWork = unitOfWork; _cache = cache; }
 
-    public async Task HandleAsync(long variantId, CancellationToken ct)
+    public DeleteVariantHandler(IProductItemRepository items, IUnitOfWork unitOfWork, ICacheService cache)
     {
-        var variant = await _variants.GetByIdAsync(variantId, ct)
-            ?? throw new EntityNotFoundException(nameof(ProductVariant), variantId);
+        _items = items;
+        _unitOfWork = unitOfWork;
+        _cache = cache;
+    }
 
-        variant.Deactivate(); // soft delete (spec section 3.2), not a hard delete
+    public async Task HandleAsync(long itemId, CancellationToken ct)
+    {
+        var item = await _items.GetByIdAsync(itemId, ct)
+            ?? throw new EntityNotFoundException(nameof(ProductItem), itemId);
+
+        item.Deactivate();
         await _unitOfWork.SaveChangesAsync(ct);
-        await _cache.RemoveAsync(ProductCacheKeys.Product(variant.ProductId), ct); // the cached product's variants list must drop the deactivated one
+        await _cache.RemoveAsync(ProductCacheKeys.Product(item.ProductId), ct);
     }
 }

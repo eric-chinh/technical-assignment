@@ -8,29 +8,32 @@ namespace ProductManagement.Application.Variants;
 
 public class UpdateVariantHandler
 {
-    private readonly IVariantRepository _variants;
+    private readonly IProductItemRepository _items;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICacheService _cache;
     private readonly IValidator<UpdateVariantRequest> _validator;
 
-    public UpdateVariantHandler(IVariantRepository variants, IUnitOfWork unitOfWork, ICacheService cache, IValidator<UpdateVariantRequest> validator)
+    public UpdateVariantHandler(IProductItemRepository items, IUnitOfWork unitOfWork, ICacheService cache, IValidator<UpdateVariantRequest> validator)
     {
-        _variants = variants;
+        _items = items;
         _unitOfWork = unitOfWork;
         _cache = cache;
         _validator = validator;
     }
 
-    public async Task<VariantDto> HandleAsync(long variantId, UpdateVariantRequest request, CancellationToken ct)
+    public async Task<ProductItemDto> HandleAsync(long itemId, UpdateVariantRequest request, CancellationToken ct)
     {
         await _validator.ValidateAndThrowAsync(request, ct);
 
-        var variant = await _variants.GetByIdAsync(variantId, ct)
-            ?? throw new EntityNotFoundException(nameof(ProductVariant), variantId);
+        var item = await _items.GetByIdAsync(itemId, ct)
+            ?? throw new EntityNotFoundException(nameof(ProductItem), itemId);
 
-        variant.UpdateDetails(request.Size, request.Color, request.Price, request.CompareAtPrice, request.Barcode);
+        if (item.Version != request.ExpectedVersion)
+            throw new ConcurrencyConflictException($"Version mismatch on product item {itemId}. Reload and retry.");
+
+        item.UpdateDetails(request.Price, request.ProductImage);
         await _unitOfWork.SaveChangesAsync(ct);
-        await _cache.RemoveAsync(ProductCacheKeys.Product(variant.ProductId), ct); // the cached product's variant details must reflect the update
-        return variant.ToDto();
+        await _cache.RemoveAsync(ProductCacheKeys.Product(item.ProductId), ct);
+        return item.ToDto();
     }
 }

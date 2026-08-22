@@ -26,7 +26,7 @@ public class DeleteProductImageHandler
 
     public async Task HandleAsync(long productId, CancellationToken ct)
     {
-        var product = await _products.GetByIdWithVariantsAsync(productId, ct)
+        var product = await _products.GetByIdWithItemsAsync(productId, ct)
             ?? throw new EntityNotFoundException(nameof(Product), productId);
 
         if (string.IsNullOrEmpty(product.ImageUrl))

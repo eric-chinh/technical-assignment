@@ -2,14 +2,14 @@ using FluentValidation;
 
 namespace ProductManagement.Application.Products;
 
-public sealed record CreateVariantRequest(
-    string Sku, string? Size, string? Color, decimal Price, int StockQuantity,
-    decimal? CompareAtPrice = null, string? Barcode = null);
+public sealed record CreateProductItemRequest(
+    string Sku, decimal Price, int QtyInStock,
+    string? ProductImage = null, long[]? VariationOptionIds = null);
 
 public sealed record CreateProductRequest(
     string Name, string Slug, long CategoryId, string? Brand,
     string? Description = null, string Attributes = "{}",
-    List<CreateVariantRequest>? Variants = null);
+    List<CreateProductItemRequest>? Items = null);
 
 public sealed class CreateProductRequestValidator : AbstractValidator<CreateProductRequest>
 {
@@ -21,14 +21,11 @@ public sealed class CreateProductRequestValidator : AbstractValidator<CreateProd
             .WithMessage("attributes JSON must be 8000 characters or fewer.");
         RuleFor(x => x.Attributes).Must(BeValidJson)
             .WithMessage("attributes must be valid JSON.");
-        RuleForEach(x => x.Variants).ChildRules(v =>
+        RuleForEach(x => x.Items).ChildRules(v =>
         {
             v.RuleFor(x => x.Sku).NotEmpty().MaximumLength(64);
             v.RuleFor(x => x.Price).GreaterThanOrEqualTo(0);
-            v.RuleFor(x => x.StockQuantity).GreaterThanOrEqualTo(0);
-            v.RuleFor(x => x)
-                .Must(x => x.CompareAtPrice is null || x.CompareAtPrice >= x.Price)
-                .WithMessage("compareAtPrice must be >= price.");
+            v.RuleFor(x => x.QtyInStock).GreaterThanOrEqualTo(0);
         });
     }
 

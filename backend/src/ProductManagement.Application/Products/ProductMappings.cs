@@ -4,18 +4,19 @@ namespace ProductManagement.Application.Products;
 
 public static class ProductMappings
 {
-    public static VariantDto ToDto(this ProductVariant v) => new(
-        v.Id, v.Sku, v.Size, v.Color, v.Price, v.CompareAtPrice, v.StockQuantity, v.Barcode, v.IsActive);
+    public static ProductItemDto ToDto(this ProductItem i) => new(
+        i.Id, i.Sku, i.Price, i.QtyInStock, i.ProductImage, i.IsActive, i.Version,
+        i.Configurations.Select(c => c.VariationOptionId).ToArray());
 
     public static ProductDto ToDto(this Product p) => new(
         p.Id, p.Name, p.Slug, p.Description, p.CategoryId, p.Brand,
         p.Status.ToString(), p.Attributes, p.ImageUrl,
-        p.Variants.Select(v => v.ToDto()).ToList());
+        p.Items.Select(i => i.ToDto()).ToList());
 
     public static ProductListItemDto ToListItemDto(this Product p) => new(
         p.Id, p.Name, p.Slug, p.CategoryId, p.Brand, p.Status.ToString(),
-        p.Variants.Count > 0 ? p.Variants.Min(v => v.Price) : null,
-        p.Variants.Count > 0 ? p.Variants.Max(v => v.Price) : null,
-        p.Variants.Sum(v => v.StockQuantity),
+        p.Items.Count > 0 ? p.Items.Min(i => i.Price) : null,
+        p.Items.Count > 0 ? p.Items.Max(i => i.Price) : null,
+        p.Items.Sum(i => i.QtyInStock),
         p.ImageUrl);
 }

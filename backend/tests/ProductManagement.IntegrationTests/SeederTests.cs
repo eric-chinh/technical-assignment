@@ -51,7 +51,7 @@ public class SeederTests : IAsyncLifetime
 
             (await db.Categories.CountAsync()).Should().BeGreaterThan(0);
             (await db.Products.CountAsync()).Should().Be(20);
-            (await db.ProductVariants.CountAsync()).Should().BeGreaterThan(0);
+            (await db.ProductItems.CountAsync()).Should().BeGreaterThan(0);
         }
         finally
         {

@@ -11,11 +11,13 @@ public class ProductRepository : IProductRepository
     private readonly ProductManagementDbContext _db;
     public ProductRepository(ProductManagementDbContext db) => _db = db;
 
-    public Task<Product?> GetByIdWithVariantsAsync(long id, CancellationToken ct) =>
-        _db.Products.Include(p => p.Variants).FirstOrDefaultAsync(p => p.Id == id, ct);
+    public Task<Product?> GetByIdWithItemsAsync(long id, CancellationToken ct) =>
+        _db.Products.Include(p => p.Items).ThenInclude(i => i.Configurations)
+            .FirstOrDefaultAsync(p => p.Id == id, ct);
 
-    public Task<Product?> GetBySlugWithVariantsAsync(string slug, CancellationToken ct) =>
-        _db.Products.Include(p => p.Variants).FirstOrDefaultAsync(p => p.Slug == slug, ct);
+    public Task<Product?> GetBySlugWithItemsAsync(string slug, CancellationToken ct) =>
+        _db.Products.Include(p => p.Items).ThenInclude(i => i.Configurations)
+            .FirstOrDefaultAsync(p => p.Slug == slug, ct);
 
     public Task<uint> GetXminAsync(long id, CancellationToken ct) =>
         _db.Products.Where(p => p.Id == id).Select(p => EF.Property<uint>(p, "xmin")).FirstAsync(ct);
@@ -27,16 +29,16 @@ public class ProductRepository : IProductRepository
 
     public async Task<PagedResult<Product>> ListAsync(ProductListQuery query, CancellationToken ct)
     {
-        var baseQuery = _db.Products.Include(p => p.Variants).AsQueryable();
+        var baseQuery = _db.Products.Include(p => p.Items).ThenInclude(i => i.Configurations).AsQueryable();
 
         if (query.CategoryId is { } categoryId) baseQuery = baseQuery.Where(p => p.CategoryId == categoryId);
         if (query.Status is { } status) baseQuery = baseQuery.Where(p => (short)p.Status == status);
-        if (query.MinPrice is { } minPrice) baseQuery = baseQuery.Where(p => p.Variants.Any(v => v.Price >= minPrice));
-        if (query.MaxPrice is { } maxPrice) baseQuery = baseQuery.Where(p => p.Variants.Any(v => v.Price <= maxPrice));
+        if (query.MinPrice is { } minPrice) baseQuery = baseQuery.Where(p => p.Items.Any(i => i.Price >= minPrice));
+        if (query.MaxPrice is { } maxPrice) baseQuery = baseQuery.Where(p => p.Items.Any(i => i.Price <= maxPrice));
         if (!string.IsNullOrWhiteSpace(query.AttributesJson))
             baseQuery = baseQuery.Where(p => EF.Functions.JsonContains(p.Attributes, query.AttributesJson));
 
-        var decodedCursor = ProductCursor.Decode(query.Cursor); // throws InvalidCursorException -> 400 (Task 11) for a present-but-broken cursor
+        var decodedCursor = ProductCursor.Decode(query.Cursor);
 
         if (!string.IsNullOrWhiteSpace(query.SearchText))
         {
@@ -45,8 +47,6 @@ public class ProductRepository : IProductRepository
                 .Where(p => EF.Property<NpgsqlTypes.NpgsqlTsVector>(p, "SearchVector")
                     .Matches(EF.Functions.WebSearchToTsQuery("english", searchText)));
 
-            // Total count over the filter + full-text match, before the cursor's rank
-            // paging window - so it stays stable across pages instead of shrinking.
             var searchTotalCount = await matchedQuery.LongCountAsync(ct);
 
             var ranked = matchedQuery
@@ -67,7 +67,6 @@ public class ProductRepository : IProductRepository
 
             if (rankedResults.Count == 0)
             {
-                // Full-text found nothing -> trigram typo-tolerant fallback (spec section 3.3)
                 var trigramQuery = baseQuery.Where(p => EF.Functions.TrigramsSimilarity(p.Name, query.SearchText) > 0.1);
                 var trigramTotalCount = await trigramQuery.LongCountAsync(ct);
                 var trigramMatches = await trigramQuery
@@ -86,8 +85,6 @@ public class ProductRepository : IProductRepository
             return new PagedResult<Product>(page.Select(x => x.Product).ToList(), nextCursor, hasMore, searchTotalCount);
         }
 
-        // Total count over the filters, before the cursor's created_at paging window -
-        // so it stays stable across pages instead of shrinking as you page forward.
         var totalCount = await baseQuery.LongCountAsync(ct);
 
         if (decodedCursor?.CreatedAt is { } afterCreatedAt)

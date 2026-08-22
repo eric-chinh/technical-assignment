@@ -8,22 +8,22 @@ namespace ProductManagement.UnitTests.Application;
 public class ProductMappingsTests
 {
     [Fact]
-    public void ToDto_WithNoVariants_ReturnsEmptyVariantsList()
+    public void ToDto_WithNoItems_ReturnsEmptyItemsList()
     {
         var product = Product.Create("Tee", "tee", categoryId: 1, brand: null);
 
         var dto = product.ToDto();
 
-        dto.Variants.Should().BeEmpty();
+        dto.Items.Should().BeEmpty();
         dto.Brand.Should().BeNull();
     }
 
     [Fact]
-    public void ToListItemDto_WithVariants_ComputesMinMaxPriceAndTotalStock()
+    public void ToListItemDto_WithItems_ComputesMinMaxPriceAndTotalStock()
     {
         var product = Product.Create("Tee", "tee", categoryId: 1, brand: "Acme");
-        product.AddVariant(ProductVariant.Create(product.Id, "SKU-1", "S", "Blue", 15m, 5));
-        product.AddVariant(ProductVariant.Create(product.Id, "SKU-2", "M", "Blue", 20m, 10));
+        product.AddItem(ProductItem.Create(product.Id, "SKU-1", 15m, 5));
+        product.AddItem(ProductItem.Create(product.Id, "SKU-2", 20m, 10));
 
         var dto = product.ToListItemDto();
 

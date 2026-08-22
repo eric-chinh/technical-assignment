@@ -23,7 +23,9 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IProductRepository, ProductRepository>();
-        services.AddScoped<IVariantRepository, VariantRepository>();
+        services.AddScoped<IProductItemRepository, ProductItemRepository>();
+        services.AddScoped<IVariationRepository, VariationRepository>();
+        services.AddScoped<IPromotionRepository, PromotionRepository>();
         services.AddScoped<ICacheService, RedisCacheService>();
         services.AddScoped<IStockRepository, StockRepository>();
         services.AddScoped<IFileStorageService>(_ =>

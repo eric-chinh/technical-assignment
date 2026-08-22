@@ -33,15 +33,14 @@ public class CreateProductHandler
 
         var product = Product.Create(request.Name, request.Slug, category.Id, request.Brand, request.Attributes);
 
-        foreach (var v in request.Variants ?? new List<CreateVariantRequest>())
+        foreach (var v in request.Items ?? [])
         {
-            product.AddVariant(ProductVariant.Create(
-                product.Id, v.Sku, v.Size, v.Color, v.Price, v.StockQuantity, v.CompareAtPrice, v.Barcode));
+            product.AddItem(ProductItem.Create(product.Id, v.Sku, v.Price, v.QtyInStock));
         }
 
         _products.Add(product);
-        await _unitOfWork.SaveChangesAsync(ct); // one transaction: product + all initial variants together
-        await _cache.IncrementVersionAsync(ProductCacheKeys.ListVersionKey, ct); // new product must appear in list views
+        await _unitOfWork.SaveChangesAsync(ct);
+        await _cache.IncrementVersionAsync(ProductCacheKeys.ListVersionKey, ct);
         return product.ToDto();
     }
 }

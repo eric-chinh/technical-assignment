@@ -31,10 +31,10 @@ public class CreateProductRequestValidatorTests
     }
 
     [Fact]
-    public async Task Validate_WithVariantCompareAtPriceBelowPrice_Fails()
+    public async Task Validate_WithItemNegativePrice_Fails()
     {
         var request = new CreateProductRequest("Tee", "tee", 1, "Acme",
-            Variants: new List<CreateVariantRequest> { new("SKU-1", "M", "Blue", 20m, 10, CompareAtPrice: 15m) });
+            Items: [new CreateProductItemRequest("SKU-1", Price: -1m, QtyInStock: 10)]);
 
         var result = await _validator.ValidateAsync(request);
 

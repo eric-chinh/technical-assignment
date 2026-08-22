@@ -25,7 +25,7 @@ public class UpdateProductHandler
     {
         await _validator.ValidateAndThrowAsync(request, ct);
 
-        var product = await _products.GetByIdWithVariantsAsync(id, ct)
+        var product = await _products.GetByIdWithItemsAsync(id, ct)
             ?? throw new EntityNotFoundException(nameof(Product), id);
 
         _products.SetExpectedVersion(product, expectedXmin);

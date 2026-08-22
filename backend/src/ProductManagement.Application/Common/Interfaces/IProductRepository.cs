@@ -5,8 +5,8 @@ namespace ProductManagement.Application.Common.Interfaces;
 
 public interface IProductRepository
 {
-    Task<Product?> GetByIdWithVariantsAsync(long id, CancellationToken ct);
-    Task<Product?> GetBySlugWithVariantsAsync(string slug, CancellationToken ct);
+    Task<Product?> GetByIdWithItemsAsync(long id, CancellationToken ct);
+    Task<Product?> GetBySlugWithItemsAsync(string slug, CancellationToken ct);
     Task<uint> GetXminAsync(long id, CancellationToken ct);
     void SetExpectedVersion(Product product, uint expectedXmin);
     Task<PagedResult<Product>> ListAsync(ProductListQuery query, CancellationToken ct);
