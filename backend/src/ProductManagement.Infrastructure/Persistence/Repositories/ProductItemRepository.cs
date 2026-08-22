@@ -14,7 +14,7 @@ public class ProductItemRepository(ProductManagementDbContext db) : IProductItem
 
     public Task<List<ProductItem>> ListByProductIdAsync(long productId, CancellationToken ct) =>
         db.ProductItems.Include(i => i.Configurations)
-            .Where(i => i.ProductId == productId && i.IsActive)
+            .Where(i => i.ProductId == productId)
             .ToListAsync(ct);
 
     public void Add(ProductItem item) => db.ProductItems.Add(item);

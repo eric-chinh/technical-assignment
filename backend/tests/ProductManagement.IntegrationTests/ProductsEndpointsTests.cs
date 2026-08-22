@@ -34,15 +34,15 @@ public class ProductsEndpointsTests : IAsyncLifetime
             slug = "classic-cotton-tee",
             categoryId,
             brand = "Acme",
-            variants = new[]
+            items = new[]
             {
-                new { sku = "TEE-M-BLU", size = "M", color = "Blue", price = 20.00m, stockQuantity = 50 }
+                new { sku = "TEE-M-BLU", price = 20.00m, qtyInStock = 50 }
             }
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var created = await response.Content.ReadFromJsonAsync<ProductRef>();
-        created!.Variants.Should().ContainSingle(v => v.Sku == "TEE-M-BLU");
+        created!.Items.Should().ContainSingle(v => v.Sku == "TEE-M-BLU");
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class ProductsEndpointsTests : IAsyncLifetime
     {
         var categoryId = await CreateCategoryAsync("tops-2");
         var createResponse = await _client.PostAsJsonAsync("/api/v1/products", new
-        { name = "Tee", slug = "tee-2", categoryId, brand = (string?)null, variants = Array.Empty<object>() });
+        { name = "Tee", slug = "tee-2", categoryId, brand = (string?)null, items = Array.Empty<object>() });
         var created = await createResponse.Content.ReadFromJsonAsync<ProductRef>();
 
         var response = await _client.GetAsync($"/api/v1/products/{created!.Id}");
@@ -63,7 +63,7 @@ public class ProductsEndpointsTests : IAsyncLifetime
     {
         var categoryId = await CreateCategoryAsync("tops-3");
         var createResponse = await _client.PostAsJsonAsync("/api/v1/products", new
-        { name = "Tee", slug = "tee-3", categoryId, brand = (string?)null, variants = Array.Empty<object>() });
+        { name = "Tee", slug = "tee-3", categoryId, brand = (string?)null, items = Array.Empty<object>() });
         var created = await createResponse.Content.ReadFromJsonAsync<ProductRef>();
 
         var request = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/products/{created!.Id}")
@@ -82,9 +82,9 @@ public class ProductsEndpointsTests : IAsyncLifetime
     {
         var categoryId = await CreateCategoryAsync("tops-4");
         await _client.PostAsJsonAsync("/api/v1/products", new
-        { name = "Blue Denim Jacket", slug = "blue-denim-jacket", categoryId, brand = "Acme", variants = Array.Empty<object>() });
+        { name = "Blue Denim Jacket", slug = "blue-denim-jacket", categoryId, brand = "Acme", items = Array.Empty<object>() });
         await _client.PostAsJsonAsync("/api/v1/products", new
-        { name = "Red Wool Scarf", slug = "red-wool-scarf", categoryId, brand = "Acme", variants = Array.Empty<object>() });
+        { name = "Red Wool Scarf", slug = "red-wool-scarf", categoryId, brand = "Acme", items = Array.Empty<object>() });
 
         var response = await _client.GetAsync("/api/v1/products?q=denim");
         var page = await response.Content.ReadFromJsonAsync<PagedRef>();
@@ -99,7 +99,7 @@ public class ProductsEndpointsTests : IAsyncLifetime
         for (var i = 0; i < 3; i++)
         {
             await _client.PostAsJsonAsync("/api/v1/products", new
-            { name = $"Paged Item {i}", slug = $"paged-item-{i}", categoryId, brand = (string?)null, variants = Array.Empty<object>() });
+            { name = $"Paged Item {i}", slug = $"paged-item-{i}", categoryId, brand = (string?)null, items = Array.Empty<object>() });
         }
 
         var firstPage = await _client.GetAsync($"/api/v1/products?categoryId={categoryId}&limit=2");
@@ -118,8 +118,8 @@ public class ProductsEndpointsTests : IAsyncLifetime
     }
 
     private sealed record CategoryRef(long Id);
-    private sealed record VariantRef(long Id, string Sku);
-    private sealed record ProductRef(long Id, string Name, List<VariantRef> Variants);
+    private sealed record ItemRef(long Id, string Sku);
+    private sealed record ProductRef(long Id, string Name, List<ItemRef> Items);
     private sealed record ProductListItemRef(long Id, string Name);
     private sealed record PagedRef(List<ProductListItemRef> Items, string? NextCursor, bool HasMore, long TotalCount);
 }

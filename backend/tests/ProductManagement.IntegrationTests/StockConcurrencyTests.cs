@@ -20,7 +20,7 @@ public class StockConcurrencyTests : IAsyncLifetime
     [Fact]
     public async Task ConcurrentDecrements_NeverOversell_ExactlyEnoughSucceed()
     {
-        // Arrange: one variant, exactly 10 in stock.
+        // Arrange: one item, exactly 10 in stock.
         var categoryResponse = await _client.PostAsJsonAsync("/api/v1/categories", new
         { name = "Flash Sale", slug = "flash-sale", parentCategoryId = (long?)null, displayOrder = 0 });
         var category = await categoryResponse.Content.ReadFromJsonAsync<IdRef>();
@@ -28,14 +28,14 @@ public class StockConcurrencyTests : IAsyncLifetime
         var productResponse = await _client.PostAsJsonAsync("/api/v1/products", new
         {
             name = "Viral Sneaker", slug = "viral-sneaker", categoryId = category!.Id, brand = "Acme",
-            variants = new[] { new { sku = "SNEAKER-9", size = "9", color = "White", price = 120.00m, stockQuantity = 10 } }
+            items = new[] { new { sku = "SNEAKER-9", price = 120.00m, qtyInStock = 10 } }
         });
-        var product = await productResponse.Content.ReadFromJsonAsync<ProductWithVariants>();
-        var variantId = product!.Variants[0].Id;
+        var product = await productResponse.Content.ReadFromJsonAsync<ProductWithItems>();
+        var itemId = product!.Items[0].Id;
 
         // Act: 30 concurrent requests each trying to decrement 1 unit, against 10 in stock.
         var tasks = Enumerable.Range(0, 30).Select(_ =>
-            _client.PatchAsJsonAsync($"/api/v1/products/{product.Id}/variants/{variantId}/stock", new { delta = -1 }));
+            _client.PostAsJsonAsync($"/api/v1/product-items/{itemId}/inventory/adjust", new { delta = -1 }));
         var responses = await Task.WhenAll(tasks);
 
         // Assert: exactly 10 succeeded, the rest got a definitive conflict - never more than 10 total decremented.
@@ -47,10 +47,10 @@ public class StockConcurrencyTests : IAsyncLifetime
         failed.Should().Be(20);
 
         var finalStockResponse = await _client.GetAsync($"/api/v1/products/{product.Id}");
-        var finalProduct = await finalStockResponse.Content.ReadFromJsonAsync<ProductWithVariants>();
-        finalProduct!.Variants[0].StockQuantity.Should().Be(0); // never negative, never short-sold
+        var finalProduct = await finalStockResponse.Content.ReadFromJsonAsync<ProductWithItems>();
+        finalProduct!.Items[0].QtyInStock.Should().Be(0); // never negative, never short-sold
     }
 
-    private sealed record VariantRef(long Id, int StockQuantity);
-    private sealed record ProductWithVariants(long Id, List<VariantRef> Variants);
+    private sealed record ItemRef(long Id, int QtyInStock);
+    private sealed record ProductWithItems(long Id, List<ItemRef> Items);
 }
