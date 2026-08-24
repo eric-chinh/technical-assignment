@@ -1,9 +1,5 @@
 # Product Management API
 
-Backend for the product management assessment — see
-`docs/superpowers/specs/2026-08-20-product-management-api-design.md` for
-the full design rationale.
-
 ## Run the full stack (one command)
 
     docker compose up --build
@@ -37,7 +33,7 @@ only). To reset to a clean slate: `docker compose down -v` then `up` again.
 | `Cors__AllowedOrigins__0` | `http://localhost:5173` | Front-end origin allowed by CORS |
 | `Seeding__CategoryCount` | `40` | Seed data volume |
 | `Seeding__ProductCount` | `5000` | Seed data volume |
-| `Seeding__MaxVariantsPerProduct` | `4` | Seed data volume |
+| `Seeding__MaxItemsPerProduct` | `4` | Seed data volume |
 
 ## Postman
 

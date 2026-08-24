@@ -89,7 +89,7 @@ export function ProductListPage() {
       title: 'Price',
       key: 'price',
       render: (_: unknown, r: ProductListItem) =>
-        r.minPrice === null ? '—' : r.minPrice === r.maxPrice ? `$${r.minPrice}` : `$${r.minPrice}–$${r.maxPrice}`,
+        r.minPrice === null ? '—' : r.minPrice === r.maxPrice ? `$${r.minPrice.toFixed(2)}` : `$${r.minPrice.toFixed(2)}–$${r.maxPrice!.toFixed(2)}`,
     },
     { title: 'Stock', dataIndex: 'totalStock', key: 'totalStock' },
     { title: 'Status', dataIndex: 'status', key: 'status' },

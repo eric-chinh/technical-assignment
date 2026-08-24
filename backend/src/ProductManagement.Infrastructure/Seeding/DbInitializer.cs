@@ -23,7 +23,7 @@ public class DbInitializer
 
         var categoryCount = _config.GetValue<int?>("Seeding:CategoryCount") ?? 40;
         var productCount = _config.GetValue<int?>("Seeding:ProductCount") ?? 5000;
-        var maxVariantsPerProduct = _config.GetValue<int?>("Seeding:MaxVariantsPerProduct") ?? 4;
+        var maxVariantsPerProduct = _config.GetValue<int?>("Seeding:MaxItemsPerProduct") ?? 4;
 
         if (categoryCount <= 0 || productCount <= 0) return; // explicit escape hatch for test runs
 

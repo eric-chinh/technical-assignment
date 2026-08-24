@@ -10,7 +10,7 @@ import type { Product } from './types';
 
 const staleProduct: Product = {
   id: 1, name: 'Classic Cotton Tee', slug: 'classic-cotton-tee', description: null,
-  categoryId: 2, brand: 'Acme', status: 'Active', attributes: '{}', imageUrl: null, variants: [],
+  categoryId: 2, brand: 'Acme', status: 'Active', attributes: '{}', imageUrl: null, items: [],
 };
 
 function renderForm() {

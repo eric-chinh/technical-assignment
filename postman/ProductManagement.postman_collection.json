@@ -53,17 +53,17 @@
       "name": "Products",
       "item": [
         {
-          "name": "Create Product With Initial Variant",
+          "name": "Create Product With Initial Item",
           "event": [{ "listen": "test", "script": { "exec": [
             "pm.test('201 Created', () => pm.response.to.have.status(201));",
             "const body = pm.response.json();",
             "pm.collectionVariables.set('productId', body.id);",
-            "pm.collectionVariables.set('variantId', body.variants[0].id);"
+            "pm.collectionVariables.set('itemId', body.items[0].id);"
           ]}}],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Classic Cotton Tee\",\n  \"slug\": \"classic-cotton-tee\",\n  \"categoryId\": {{categoryId}},\n  \"brand\": \"Acme\",\n  \"variants\": [\n    { \"sku\": \"TEE-M-BLU\", \"size\": \"M\", \"color\": \"Blue\", \"price\": 20.00, \"stockQuantity\": 50 }\n  ]\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Classic Cotton Tee\",\n  \"slug\": \"classic-cotton-tee\",\n  \"categoryId\": {{categoryId}},\n  \"brand\": \"Acme\",\n  \"items\": [\n    { \"sku\": \"TEE-M-BLU\", \"price\": 20.00, \"qtyInStock\": 50 }\n  ]\n}" },
             "url": { "raw": "{{baseUrl}}/products", "host": ["{{baseUrl}}"], "path": ["products"] }
           }
         },
@@ -112,44 +112,44 @@
       ]
     },
     {
-      "name": "Variants & Stock",
+      "name": "Items & Stock",
       "item": [
         {
           "name": "Adjust Stock - Decrement",
           "request": {
-            "method": "PATCH",
+            "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": { "mode": "raw", "raw": "{ \"delta\": -3 }" },
             "url": {
-              "raw": "{{baseUrl}}/products/{{productId}}/variants/{{variantId}}/stock",
-              "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}", "variants", "{{variantId}}", "stock"]
+              "raw": "{{baseUrl}}/product-items/{{itemId}}/inventory/adjust",
+              "host": ["{{baseUrl}}"], "path": ["product-items", "{{itemId}}", "inventory", "adjust"]
             }
           }
         },
         {
           "name": "Adjust Stock - Insufficient Stock (409)",
           "request": {
-            "method": "PATCH",
+            "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": { "mode": "raw", "raw": "{ \"delta\": -999999 }" },
             "url": {
-              "raw": "{{baseUrl}}/products/{{productId}}/variants/{{variantId}}/stock",
-              "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}", "variants", "{{variantId}}", "stock"]
+              "raw": "{{baseUrl}}/product-items/{{itemId}}/inventory/adjust",
+              "host": ["{{baseUrl}}"], "path": ["product-items", "{{itemId}}", "inventory", "adjust"]
             }
           }
         },
         {
           "name": "Adjust Stock - With Idempotency-Key",
           "request": {
-            "method": "PATCH",
+            "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
               { "key": "Idempotency-Key", "value": "{{$guid}}" }
             ],
             "body": { "mode": "raw", "raw": "{ \"delta\": -1 }" },
             "url": {
-              "raw": "{{baseUrl}}/products/{{productId}}/variants/{{variantId}}/stock",
-              "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}", "variants", "{{variantId}}", "stock"]
+              "raw": "{{baseUrl}}/product-items/{{itemId}}/inventory/adjust",
+              "host": ["{{baseUrl}}"], "path": ["product-items", "{{itemId}}", "inventory", "adjust"]
             }
           }
         }
@@ -179,7 +179,7 @@
   "variable": [
     { "key": "categoryId", "value": "" },
     { "key": "productId", "value": "" },
-    { "key": "variantId", "value": "" },
+    { "key": "itemId", "value": "" },
     { "key": "productEtag", "value": "" }
   ]
 }

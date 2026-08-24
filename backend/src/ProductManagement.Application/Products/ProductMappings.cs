@@ -13,10 +13,14 @@ public static class ProductMappings
         p.Status.ToString(), p.Attributes, p.ImageUrl,
         p.Items.Select(i => i.ToDto()).ToList());
 
-    public static ProductListItemDto ToListItemDto(this Product p) => new(
-        p.Id, p.Name, p.Slug, p.CategoryId, p.Brand, p.Status.ToString(),
-        p.Items.Count > 0 ? p.Items.Min(i => i.Price) : null,
-        p.Items.Count > 0 ? p.Items.Max(i => i.Price) : null,
-        p.Items.Sum(i => i.QtyInStock),
-        p.ImageUrl);
+    public static ProductListItemDto ToListItemDto(this Product p)
+    {
+        var active = p.Items.Where(i => i.IsActive).ToList();
+        return new(
+            p.Id, p.Name, p.Slug, p.CategoryId, p.Brand, p.Status.ToString(),
+            active.Count > 0 ? active.Min(i => i.Price) : null,
+            active.Count > 0 ? active.Max(i => i.Price) : null,
+            active.Sum(i => i.QtyInStock),
+            p.ImageUrl);
+    }
 }

@@ -33,8 +33,8 @@ public class ProductRepository : IProductRepository
 
         if (query.CategoryId is { } categoryId) baseQuery = baseQuery.Where(p => p.CategoryId == categoryId);
         if (query.Status is { } status) baseQuery = baseQuery.Where(p => (short)p.Status == status);
-        if (query.MinPrice is { } minPrice) baseQuery = baseQuery.Where(p => p.Items.Any(i => i.Price >= minPrice));
-        if (query.MaxPrice is { } maxPrice) baseQuery = baseQuery.Where(p => p.Items.Any(i => i.Price <= maxPrice));
+        if (query.MinPrice is { } minPrice) baseQuery = baseQuery.Where(p => p.Items.Any(i => i.IsActive && i.Price >= minPrice));
+        if (query.MaxPrice is { } maxPrice) baseQuery = baseQuery.Where(p => p.Items.Any(i => i.IsActive && i.Price <= maxPrice));
         if (!string.IsNullOrWhiteSpace(query.AttributesJson))
             baseQuery = baseQuery.Where(p => EF.Functions.JsonContains(p.Attributes, query.AttributesJson));
 

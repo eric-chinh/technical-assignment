@@ -40,7 +40,7 @@ export const VariantsTable = memo(function VariantsTable({ productId, items }: P
 
   const columns = [
     { title: 'SKU', dataIndex: 'sku', key: 'sku' },
-    { title: 'Price', dataIndex: 'price', key: 'price', render: (p: number) => `$${p}` },
+    { title: 'Price', dataIndex: 'price', key: 'price', render: (p: number) => `$${p.toFixed(2)}` },
     {
       title: 'Stock',
       key: 'stock',
