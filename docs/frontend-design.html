@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Frontend Design Document — Product Management</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #1a1a2e;
+      background: #fff;
+    }
+
+    /* Cover page */
+    .cover {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 80px 72px;
+      background: linear-gradient(135deg, #0f3460 0%, #16213e 60%, #1a1a2e 100%);
+      color: #fff;
+      page-break-after: always;
+    }
+    .cover-tag {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #e94560;
+      margin-bottom: 24px;
+    }
+    .cover h1 {
+      font-size: 42px;
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 16px;
+      max-width: 620px;
+    }
+    .cover h1 span { color: #e94560; }
+    .cover-sub {
+      font-size: 16px;
+      color: #a8b2c1;
+      max-width: 520px;
+      margin-bottom: 60px;
+    }
+    .cover-meta {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      width: 100%;
+      max-width: 620px;
+      border-top: 1px solid rgba(255,255,255,0.15);
+      padding-top: 32px;
+    }
+    .cover-meta-item label {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #a8b2c1;
+      margin-bottom: 4px;
+    }
+    .cover-meta-item span {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    /* TOC */
+    .toc-page {
+      padding: 72px;
+      page-break-after: always;
+    }
+    .toc-page h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #0f3460;
+      border-bottom: 3px solid #e94560;
+      padding-bottom: 10px;
+      margin-bottom: 32px;
+    }
+    .toc-list { list-style: none; }
+    .toc-list li {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px dashed #dde1e7;
+      font-size: 13px;
+    }
+    .toc-list li .toc-num {
+      font-weight: 700;
+      color: #e94560;
+      min-width: 28px;
+    }
+    .toc-list li .toc-title { flex: 1; color: #1a1a2e; }
+    .toc-list li.toc-sub { padding-left: 36px; color: #555; }
+    .toc-list li.toc-sub .toc-num { color: #888; font-weight: 500; }
+
+    /* Content pages */
+    .page {
+      padding: 64px 72px;
+      page-break-after: always;
+    }
+    .page:last-child { page-break-after: auto; }
+
+    /* Section header */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .section-num {
+      background: #e94560;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .section-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f3460;
+    }
+
+    h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f3460;
+      margin: 28px 0 10px;
+      padding-left: 12px;
+      border-left: 3px solid #e94560;
+    }
+    h4 {
+      font-size: 13px;
+      font-weight: 700;
+      color: #333;
+      margin: 18px 0 6px;
+    }
+    p { margin-bottom: 10px; color: #333; }
+    ul, ol { margin: 8px 0 12px 20px; color: #333; }
+    li { margin-bottom: 4px; }
+
+    /* Code block */
+    pre {
+      background: #1a1a2e;
+      color: #e2e8f0;
+      border-radius: 6px;
+      padding: 16px 20px;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      font-size: 11.5px;
+      line-height: 1.7;
+      overflow-x: auto;
+      margin: 12px 0 16px;
+    }
+    code {
+      background: #f0f4f8;
+      color: #0f3460;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      font-size: 11.5px;
+    }
+    pre code { background: none; color: inherit; padding: 0; }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      font-size: 12px;
+    }
+    thead tr { background: #0f3460; color: #fff; }
+    thead th { padding: 10px 14px; text-align: left; font-weight: 600; }
+    tbody tr:nth-child(even) { background: #f7f9fc; }
+    tbody td { padding: 9px 14px; border-bottom: 1px solid #e2e8f0; color: #333; }
+    tbody td:first-child { font-weight: 600; color: #0f3460; }
+
+    /* Badges / pills */
+    .badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 20px;
+      font-size: 10.5px;
+      font-weight: 600;
+    }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-red  { background: #fee2e2; color: #b91c1c; }
+    .badge-green{ background: #d1fae5; color: #065f46; }
+    .badge-gray { background: #f1f5f9; color: #475569; }
+
+    /* Info / note box */
+    .callout {
+      border-left: 4px solid #e94560;
+      background: #fff5f7;
+      padding: 12px 16px;
+      border-radius: 0 6px 6px 0;
+      margin: 12px 0 16px;
+      font-size: 12px;
+      color: #555;
+    }
+
+    /* Two-column grid */
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin: 12px 0;
+    }
+    .card {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card h4 { margin-top: 0; }
+
+    /* Folder tree */
+    .tree {
+      background: #1a1a2e;
+      color: #a8d8ea;
+      border-radius: 6px;
+      padding: 16px 20px;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      font-size: 11.5px;
+      line-height: 1.8;
+      margin: 12px 0 16px;
+    }
+    .tree .dir  { color: #e2e8f0; font-weight: 600; }
+    .tree .file { color: #a8d8ea; }
+    .tree .comment { color: #6b7280; font-style: italic; }
+
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .cover { min-height: 100vh; }
+      .page, .toc-page { page-break-after: always; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     COVER
+════════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-tag">Technical Document</div>
+  <h1>Frontend Design<br /><span>Requirements</span></h1>
+  <p class="cover-sub">
+    Architecture, component structure, state management, API integration,
+    and performance strategy for the Product Management SPA.
+  </p>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <label>Project</label>
+      <span>Product Management</span>
+    </div>
+    <div class="cover-meta-item">
+      <label>Framework</label>
+      <span>React 19 + TypeScript 6</span>
+    </div>
+    <div class="cover-meta-item">
+      <label>Date</label>
+      <span>August 2026</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TABLE OF CONTENTS
+════════════════════════════════════════════════ -->
+<div class="toc-page">
+  <h2>Table of Contents</h2>
+  <ul class="toc-list">
+    <li><span class="toc-num">1</span><span class="toc-title">Project Structure</span></li>
+    <li class="toc-sub"><span class="toc-num">1.1</span><span class="toc-title">Folder Organisation</span></li>
+    <li class="toc-sub"><span class="toc-num">1.2</span><span class="toc-title">Feature-Slice Pattern</span></li>
+    <li class="toc-sub"><span class="toc-num">1.3</span><span class="toc-title">Shared Utilities</span></li>
+    <li><span class="toc-num">2</span><span class="toc-title">UI Layout</span></li>
+    <li class="toc-sub"><span class="toc-num">2.1</span><span class="toc-title">Application Shell</span></li>
+    <li class="toc-sub"><span class="toc-num">2.2</span><span class="toc-title">Routing &amp; Navigation</span></li>
+    <li class="toc-sub"><span class="toc-num">2.3</span><span class="toc-title">Page Layouts</span></li>
+    <li><span class="toc-num">3</span><span class="toc-title">Technology Stack</span></li>
+    <li class="toc-sub"><span class="toc-num">3.1</span><span class="toc-title">UI Framework</span></li>
+    <li class="toc-sub"><span class="toc-num">3.2</span><span class="toc-title">State Management</span></li>
+    <li class="toc-sub"><span class="toc-num">3.3</span><span class="toc-title">API Client</span></li>
+    <li class="toc-sub"><span class="toc-num">3.4</span><span class="toc-title">File Uploader</span></li>
+    <li><span class="toc-num">4</span><span class="toc-title">API &amp; Data Handling</span></li>
+    <li class="toc-sub"><span class="toc-num">4.1</span><span class="toc-title">Base Query &amp; Error Normalisation</span></li>
+    <li class="toc-sub"><span class="toc-num">4.2</span><span class="toc-title">Input Validation</span></li>
+    <li class="toc-sub"><span class="toc-num">4.3</span><span class="toc-title">Response Handling &amp; Cache Tags</span></li>
+    <li class="toc-sub"><span class="toc-num">4.4</span><span class="toc-title">Concurrent Edit (ETag / If-Match)</span></li>
+    <li><span class="toc-num">5</span><span class="toc-title">Performance</span></li>
+    <li class="toc-sub"><span class="toc-num">5.1</span><span class="toc-title">Code Splitting &amp; Lazy Loading</span></li>
+    <li class="toc-sub"><span class="toc-num">5.2</span><span class="toc-title">Optimistic Updates</span></li>
+    <li class="toc-sub"><span class="toc-num">5.3</span><span class="toc-title">Debouncing &amp; Prefetching</span></li>
+    <li class="toc-sub"><span class="toc-num">5.4</span><span class="toc-title">Error Handling Strategy</span></li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SECTION 1 — PROJECT STRUCTURE
+════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="section-num">1</div>
+    <div class="section-title">Project Structure</div>
+  </div>
+
+  <h3>1.1 Folder Organisation</h3>
+  <p>
+    The frontend follows a <strong>feature-slice</strong> architecture. Each domain feature owns
+    its own components, API hooks, types, and tests. Cross-feature code lives in
+    <code>shared/</code>. There is no monolithic component folder.
+  </p>
+
+  <div class="tree">
+<span class="dir">src/</span>
+├── <span class="dir">app/</span>
+│   ├── <span class="file">router.tsx</span>         <span class="comment"># route definitions with lazy imports</span>
+│   └── <span class="file">store.ts</span>          <span class="comment"># Redux store + RTK Query wiring</span>
+│
+├── <span class="dir">features/</span>
+│   ├── <span class="dir">products/</span>
+│   │   ├── <span class="file">api.ts</span>             <span class="comment"># RTK Query endpoints for products & items</span>
+│   │   ├── <span class="file">types.ts</span>           <span class="comment"># Product, ProductItem, ProductListItem</span>
+│   │   ├── <span class="file">ProductListPage.tsx</span>
+│   │   ├── <span class="file">ProductDetailPage.tsx</span>
+│   │   ├── <span class="file">ProductForm.tsx</span>
+│   │   ├── <span class="file">VariantsTable.tsx</span>
+│   │   ├── <span class="file">ImageUploader.tsx</span>
+│   │   └── <span class="file">*.test.tsx</span>
+│   └── <span class="dir">categories/</span>
+│       ├── <span class="file">api.ts</span>
+│       ├── <span class="file">types.ts</span>
+│       ├── <span class="file">CategoryListPage.tsx</span>
+│       ├── <span class="file">CategoryForm.tsx</span>
+│       ├── <span class="file">buildCategoryTree.ts</span>
+│       └── <span class="file">*.test.tsx</span>
+│
+├── <span class="dir">shared/</span>
+│   ├── <span class="dir">components/</span>
+│   │   ├── <span class="file">AppLayout.tsx</span>      <span class="comment"># shell: sidebar + header + content</span>
+│   │   └── <span class="file">ErrorBoundary.tsx</span>  <span class="comment"># catches unhandled render errors</span>
+│   ├── <span class="dir">hooks/</span>
+│   │   └── <span class="file">useDebouncedValue.ts</span>
+│   └── <span class="dir">lib/</span>
+│       ├── <span class="file">apiBase.ts</span>         <span class="comment"># RTK Query createApi base</span>
+│       ├── <span class="file">axiosClient.ts</span>     <span class="comment"># Axios instance + interceptors</span>
+│       ├── <span class="file">errors.ts</span>          <span class="comment"># AppError normalisation</span>
+│       ├── <span class="file">etagStore.ts</span>       <span class="comment"># in-memory ETag cache</span>
+│       └── <span class="file">resolveImageUrl.ts</span>
+│
+├── <span class="dir">mocks/</span>
+│   ├── <span class="file">handlers.ts</span>        <span class="comment"># MSW mock handlers (tests only)</span>
+│   └── <span class="file">server.ts</span>
+│
+└── <span class="file">main.tsx</span>              <span class="comment"># entry point: Provider + RouterProvider</span>
+  </div>
+
+  <h3>1.2 Feature-Slice Pattern</h3>
+  <p>
+    Each feature directory is self-contained. A feature exposes only what other features
+    need (typically its route component) — internal sub-components, hooks, and utilities
+    stay private to the feature. This keeps coupling low and makes it straightforward to
+    add, remove, or refactor a feature without touching unrelated code.
+  </p>
+  <div class="grid2">
+    <div class="card">
+      <h4>What lives in a feature</h4>
+      <ul>
+        <li>Page component(s)</li>
+        <li>RTK Query API slice (<code>api.ts</code>)</li>
+        <li>TypeScript interfaces (<code>types.ts</code>)</li>
+        <li>Sub-components (forms, tables)</li>
+        <li>Co-located unit/component tests</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>What lives in shared</h4>
+      <ul>
+        <li>App shell layout</li>
+        <li>Error boundary</li>
+        <li>Custom hooks</li>
+        <li>Axios instance &amp; error utilities</li>
+        <li>RTK Query base configuration</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>1.3 Shared Utilities</h3>
+  <table>
+    <thead><tr><th>File</th><th>Responsibility</th></tr></thead>
+    <tbody>
+      <tr><td>apiBase.ts</td><td>Single <code>createApi</code> instance shared by all feature API slices</td></tr>
+      <tr><td>axiosClient.ts</td><td>Axios instance with base URL, response interceptor (ETag capture), error interceptor</td></tr>
+      <tr><td>errors.ts</td><td>Converts Axios errors → <code>AppError</code> (status, message, fieldErrors, raw)</td></tr>
+      <tr><td>etagStore.ts</td><td>In-memory <code>Map&lt;url, etag&gt;</code> for optimistic concurrency</td></tr>
+      <tr><td>resolveImageUrl.ts</td><td>Turns relative upload paths into fully qualified API-origin URLs</td></tr>
+      <tr><td>useDebouncedValue.ts</td><td>Generic debounce hook used for search input (350 ms delay)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SECTION 2 — UI LAYOUT
+════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="section-num">2</div>
+    <div class="section-title">UI Layout</div>
+  </div>
+
+  <h3>2.1 Application Shell</h3>
+  <p>
+    The entire application is wrapped in <code>AppLayout</code>, an Ant Design
+    <code>Layout</code> component that provides a fixed left sidebar, a top header bar,
+    and a scrollable content area. The sidebar highlights the active route automatically
+    using React Router's <code>useLocation</code> hook.
+  </p>
+  <pre><code>Layout
+├── Sider          ← fixed 220 px sidebar with Menu (Products / Categories)
+├── Layout
+│   ├── Header     ← application title bar
+│   └── Content    ← &lt;Outlet /&gt; — page content renders here</code></pre>
+
+  <h3>2.2 Routing &amp; Navigation</h3>
+  <p>All routes are defined in <code>app/router.tsx</code> and are lazy-loaded.</p>
+  <table>
+    <thead><tr><th>Path</th><th>Component</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>/</td><td>ProductListPage</td><td>Default redirect — product list</td></tr>
+      <tr><td>/products</td><td>ProductListPage</td><td>Search, filter, paginate products</td></tr>
+      <tr><td>/products/new</td><td>ProductDetailPage</td><td>Create a new product</td></tr>
+      <tr><td>/products/:id</td><td>ProductDetailPage</td><td>Edit existing product &amp; manage items</td></tr>
+      <tr><td>/categories</td><td>CategoryListPage</td><td>Manage categories (CRUD inline)</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Every page component is wrapped with a <code>withSuspense()</code> helper that renders
+    an Ant Design <code>&lt;Spin /&gt;</code> spinner as the Suspense fallback while the
+    JavaScript chunk downloads.
+  </p>
+
+  <h3>2.3 Page Layouts</h3>
+
+  <h4>Product List Page</h4>
+  <ul>
+    <li>Search bar + category filter + "New Product" button in a flex toolbar</li>
+    <li>Ant Design <code>Table</code> with image thumbnail, name, price range, stock, status, and edit action</li>
+    <li>Cursor-based pagination controls (Previous / Next) with page indicator</li>
+    <li>Inline <code>Result</code> error state with Retry button on API failure</li>
+  </ul>
+
+  <h4>Product Detail Page</h4>
+  <ul>
+    <li><code>ProductForm</code> — core product fields (name, slug, category, brand, description)</li>
+    <li><code>ImageUploader</code> — drag-and-drop / click image upload with preview</li>
+    <li><code>VariantsTable</code> — list of product items with stock +/− controls and delete</li>
+    <li>Inline "Add Variant" form below the table</li>
+  </ul>
+
+  <h4>Category List Page</h4>
+  <ul>
+    <li>Ant Design <code>Table</code> rendering a flat list with parent category name column</li>
+    <li>Inline <code>CategoryForm</code> drawer/modal for create and edit</li>
+    <li>Hierarchical <code>TreeSelect</code> for parent category assignment</li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SECTION 3 — TECHNOLOGY STACK
+════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="section-num">3</div>
+    <div class="section-title">Technology Stack Components</div>
+  </div>
+
+  <h3>3.1 UI Framework — Ant Design 6</h3>
+  <p>
+    <strong>Ant Design (antd) v6</strong> is used as the sole UI component library.
+    It provides a comprehensive set of production-ready components, eliminating the need
+    for a separate CSS framework like Tailwind or Material UI.
+  </p>
+  <table>
+    <thead><tr><th>Component</th><th>Used for</th></tr></thead>
+    <tbody>
+      <tr><td>Layout / Sider / Header</td><td>Application shell</td></tr>
+      <tr><td>Table</td><td>Product list, category list, variants table</td></tr>
+      <tr><td>Form / Input / Select / TreeSelect</td><td>Product &amp; category forms</td></tr>
+      <tr><td>Upload</td><td>Image upload with preview</td></tr>
+      <tr><td>Modal / Popconfirm</td><td>Conflict dialog, delete confirmation</td></tr>
+      <tr><td>Result</td><td>API error state, error boundary display</td></tr>
+      <tr><td>Spin / Button / Space / message</td><td>Loading, actions, toasts</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.2 State Management — Redux Toolkit + RTK Query</h3>
+  <p>
+    <strong>Redux Toolkit (RTK)</strong> is used for global state. In practice, the only
+    global state is server data — managed entirely by <strong>RTK Query</strong>, the
+    data-fetching and caching layer bundled with RTK. There are no hand-written Redux slices.
+  </p>
+  <pre><code>// store.ts
+export const store = configureStore({
+  reducer: {
+    [api.reducerPath]: api.reducer,   // all server state lives here
+  },
+  middleware: (getDefault) =>
+    getDefault().concat(api.middleware),  // adds caching, invalidation, polling
+});</code></pre>
+
+  <div class="callout">
+    RTK Query handles request deduplication, background refetching, cache tag invalidation,
+    optimistic updates, and loading/error states — removing the need for any manual
+    <code>useEffect</code>-based data fetching.
+  </div>
+
+  <h3>3.3 API Client — Axios + RTK Query custom baseQuery</h3>
+  <p>
+    <strong>Axios v1</strong> is used as the HTTP client. Rather than using RTK Query's
+    default <code>fetchBaseQuery</code>, a custom <code>axiosBaseQuery</code> wraps Axios
+    so that all requests flow through the shared Axios instance (which carries interceptors
+    for ETag capture and error normalisation).
+  </p>
+  <pre><code>// axiosClient.ts — response interceptor
+axios.interceptors.response.use((response) => {
+  const etag = response.headers['etag'];
+  if (etag) etagStore.set(response.config.url!, etag);  // cache ETag per URL
+  return response;
+});
+
+// apiBase.ts — custom baseQuery fed to createApi
+const axiosBaseQuery: BaseQueryFn = async ({ url, method, data, params }) => {
+  try {
+    const result = await axiosClient({ url, method, data, params });
+    return { data: result.data };
+  } catch (err) {
+    return { error: toAppError(err) };   // normalise all errors to AppError
+  }
+};</code></pre>
+
+  <h3>3.4 File Uploader — Ant Design Upload + RTK Query mutation</h3>
+  <p>
+    Image upload is handled by the <code>ImageUploader</code> component using Ant Design's
+    <code>&lt;Upload&gt;</code> with a <strong>custom request handler</strong>. The default
+    upload behaviour is suppressed; instead, the component manually builds a
+    <code>FormData</code> object and dispatches an RTK Query mutation.
+  </p>
+  <table>
+    <thead><tr><th>Concern</th><th>Implementation</th></tr></thead>
+    <tbody>
+      <tr><td>Allowed types</td><td>JPEG, PNG, WEBP — validated in <code>beforeUpload()</code></td></tr>
+      <tr><td>Max size</td><td>5 MB — validated in <code>beforeUpload()</code> before upload starts</td></tr>
+      <tr><td>Transport</td><td><code>multipart/form-data</code> via <code>uploadImage</code> RTK Query mutation</td></tr>
+      <tr><td>Preview</td><td>Inline image rendered from resolved API URL; hidden if URL is null</td></tr>
+      <tr><td>Fallback</td><td><code>onError</code> handler switches to placeholder SVG on broken images</td></tr>
+      <tr><td>Delete</td><td><code>deleteImage</code> mutation; cache is invalidated to refresh the product</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SECTION 4 — API AND DATA HANDLING
+════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="section-num">4</div>
+    <div class="section-title">API &amp; Data Handling</div>
+  </div>
+
+  <h3>4.1 Base Query &amp; Error Normalisation</h3>
+  <p>
+    All API calls go through a single Axios instance. Errors from any endpoint are
+    converted into a consistent <code>AppError</code> shape by <code>toAppError()</code>
+    in <code>errors.ts</code>, which parses the backend's RFC-9457 <code>ProblemDetails</code>
+    response body.
+  </p>
+  <pre><code>interface AppError {
+  status:      number;        // HTTP status code
+  message:     string;        // human-readable title
+  fieldErrors: FieldError[];  // [{propertyName, errorMessage}] for 400 validation
+  traceId:     string | null;
+  raw:         unknown;       // original response body (for non-standard shapes)
+}
+
+interface FieldError {
+  propertyName: string;   // e.g. "name", "slug"
+  errorMessage: string;
+}</code></pre>
+
+  <h3>4.2 Input Validation</h3>
+  <p>
+    Validation operates on two levels: client-side (Ant Design Form rules) and server-side
+    (FluentValidation errors mapped back to form fields).
+  </p>
+
+  <h4>Client-side — Ant Design Form rules</h4>
+  <ul>
+    <li><strong>Name</strong>: required, max 200 characters</li>
+    <li><strong>Slug</strong>: required (create only), must match <code>/^[a-z0-9-]+$/</code></li>
+    <li><strong>Category</strong>: required dropdown selection</li>
+    <li><strong>SKU</strong>: required, max 64 characters</li>
+    <li><strong>Price</strong>: required, ≥ 0</li>
+    <li><strong>Qty in stock</strong>: required integer, ≥ 0</li>
+  </ul>
+
+  <h4>Server-side — field error mapping</h4>
+  <p>
+    When the API returns <code>400 Bad Request</code> with <code>fieldErrors</code>, the
+    component maps them onto Ant Design form fields so validation messages appear inline
+    under the relevant inputs:
+  </p>
+  <pre><code>// ProductForm.tsx
+const fieldErrors = (err as AppError).fieldErrors ?? [];
+form.setFields(
+  fieldErrors.map(({ propertyName, errorMessage }) => ({
+    name: propertyName.charAt(0).toLowerCase() + propertyName.slice(1),
+    errors: [errorMessage],
+  }))
+);</code></pre>
+
+  <h3>4.3 Response Handling &amp; Cache Tags</h3>
+  <p>
+    RTK Query uses a tag-based cache invalidation system. Every mutation declares which
+    tags it invalidates, and every query declares which tags it provides.
+  </p>
+  <table>
+    <thead><tr><th>Mutation</th><th>Tags invalidated</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td>createProduct</td><td>ProductList</td><td>Refetches the product list</td></tr>
+      <tr><td>updateProduct</td><td>Product(id), ProductList</td><td>Refetches the product and list</td></tr>
+      <tr><td>deleteProduct</td><td>Product(id), ProductList</td><td>Removes from list</td></tr>
+      <tr><td>createProductItem</td><td>Product(productId)</td><td>Refreshes detail page</td></tr>
+      <tr><td>deleteProductItem</td><td>Product(productId)</td><td>Refreshes detail page</td></tr>
+      <tr><td>uploadImage / deleteImage</td><td>Product(id), ProductList</td><td>Updates image in list &amp; detail</td></tr>
+      <tr><td>adjustStock</td><td>Product(productId)</td><td>Refreshes stock count (after optimistic)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.4 Concurrent Edit — ETag / If-Match</h3>
+  <p>
+    To prevent lost updates when two users edit the same product simultaneously, the app
+    implements <strong>optimistic concurrency</strong> using HTTP ETags.
+  </p>
+  <ol>
+    <li><code>GET /products/:id</code> — the Axios response interceptor stores the <code>ETag</code> header in <code>etagStore</code></li>
+    <li><code>PUT /products/:id</code> — the mutation reads the stored ETag and sends it as an <code>If-Match</code> header</li>
+    <li>If the server responds with <code>409 Conflict</code>, <code>ProductForm</code> shows a modal: <em>"This product was changed by someone else"</em> with a <strong>Reload latest</strong> button</li>
+    <li>Clicking Reload invalidates the cache, fetches the fresh version, and closes the modal</li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SECTION 5 — PERFORMANCE
+════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="section-num">5</div>
+    <div class="section-title">Performance</div>
+  </div>
+
+  <h3>5.1 Code Splitting &amp; Lazy Loading</h3>
+  <p>
+    All three page-level components are code-split using <code>React.lazy()</code>.
+    Vite automatically produces a separate JS chunk per lazy import. The browser only
+    downloads a page's chunk when the user first navigates to that route.
+  </p>
+  <pre><code>// app/router.tsx
+const ProductListPage   = lazy(() => import('../features/products/ProductListPage'));
+const ProductDetailPage = lazy(() => import('../features/products/ProductDetailPage'));
+const CategoryListPage  = lazy(() => import('../features/categories/CategoryListPage'));
+
+// Each is wrapped in Suspense with a loading spinner
+function withSuspense(Component: ComponentType) {
+  return (
+    &lt;Suspense fallback={&lt;Spin size="large" /&gt;}&gt;
+      &lt;Component /&gt;
+    &lt;/Suspense&gt;
+  );
+}</code></pre>
+
+  <p>Product thumbnail images in the list use the browser's native lazy loading:</p>
+  <pre><code>&lt;img src={...} loading="lazy" style={{ width: 40, height: 40, objectFit: 'cover' }} /&gt;</code></pre>
+
+  <h3>5.2 Optimistic Updates — Stock Adjustment</h3>
+  <p>
+    The <code>adjustStock</code> mutation applies an <strong>optimistic update</strong>:
+    the UI increments or decrements the stock count immediately, without waiting for the
+    server response. If the server rejects the request (e.g. insufficient stock), RTK
+    Query automatically rolls back the cache to its previous state.
+  </p>
+  <pre><code>adjustStock: builder.mutation({
+  async onQueryStarted({ productId, itemId, delta }, { dispatch, queryFulfilled }) {
+    const patch = dispatch(
+      productsApi.util.updateQueryData('getProduct', productId, (draft) => {
+        const item = draft.items.find((i) => i.id === itemId);
+        if (item) item.qtyInStock += delta;
+      })
+    );
+    try {
+      await queryFulfilled;
+    } catch {
+      patch.undo();   // roll back on server error
+    }
+  },
+})</code></pre>
+
+  <h3>5.3 Debouncing &amp; Prefetching</h3>
+
+  <h4>Search debounce</h4>
+  <p>
+    The product search input is debounced by <strong>350 ms</strong> via
+    <code>useDebouncedValue</code>. The API query is only fired after the user pauses
+    typing, preventing a network request on every keystroke.
+  </p>
+  <pre><code>const debouncedQ = useDebouncedValue(q, 350);
+const { data } = useListProductsQuery({ q: debouncedQ || undefined, ... });</code></pre>
+
+  <h4>Hover prefetch</h4>
+  <p>
+    When the user hovers over a product row in the list, the detail query is prefetched
+    silently in the background. By the time the user clicks "Edit", the data is already
+    in the RTK Query cache — the detail page appears instantly.
+  </p>
+  <pre><code>const prefetchProduct = productsApi.usePrefetch('getProduct');
+
+// on table row hover:
+onMouseEnter: () => prefetchProduct(record.id)</code></pre>
+
+  <h3>5.4 Error Handling Strategy</h3>
+  <p>The app uses three layers of error handling, from coarse to fine:</p>
+  <table>
+    <thead><tr><th>Layer</th><th>Mechanism</th><th>Handles</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Global</td>
+        <td><code>ErrorBoundary</code> (class component)</td>
+        <td>Uncaught render errors — shows a full-page error Result with Reload</td>
+      </tr>
+      <tr>
+        <td>Page</td>
+        <td>RTK Query <code>isError</code> flag + Ant Design <code>Result</code></td>
+        <td>Network failure / API unreachable — inline error with Retry button</td>
+      </tr>
+      <tr>
+        <td>Component</td>
+        <td><code>try/catch</code> around mutations + <code>message.error()</code></td>
+        <td>Mutation failures (save, delete, stock adjust) — toast notification</td>
+      </tr>
+      <tr>
+        <td>Form field</td>
+        <td><code>form.setFields(fieldErrors)</code></td>
+        <td>Server-side 400 validation — inline messages under each input</td>
+      </tr>
+      <tr>
+        <td>Conflict</td>
+        <td>409 Conflict → Modal dialog</td>
+        <td>Concurrent edit detection — user prompted to reload latest version</td>
+      </tr>
+      <tr>
+        <td>Image</td>
+        <td><code>img onError</code> fallback</td>
+        <td>Broken image URLs — replaced with placeholder SVG</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    The stock endpoint returns a non-standard 409 body (<code>{ availableQuantity }</code>
+    instead of ProblemDetails). The <code>raw</code> field on <code>AppError</code> preserves
+    this original response so the component can surface a specific message:
+    <em>"Only N left — you requested more than that."</em>
+  </div>
+</div>
+
+</body>
+</html>
